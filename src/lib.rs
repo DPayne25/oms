@@ -1,3 +1,9 @@
+use std::net::TcpStream;
+use std::sync::Mutex;
+use std::{collections::HashMap, error::Error, sync::atomic::{AtomicU64}};
+use serde::{Serialize, Deserialize};
+use reqwest::{Client};
+
 // Order Direction
 pub enum OrderDirection {
     Buy,
@@ -62,4 +68,74 @@ pub struct ChildExecution {
     account_id: [u8; 16],
     lot_size: u64,
     status: ExecutionStatus,
+}
+
+
+//Research research a crate later https://library.tradingtechnologies.com/tt-fix/ & https://www.onixs.biz/fix-dictionary/4.4/msgType_8_8.html#
+pub struct FixAdapter { 
+    pub stream: Mutex<Option<TcpStream>>, //validates connection > use single pipeline
+    pub begin_string: String, // FIX 4.2 or FIX 4.4
+    pub sender_comp_id: String,
+    pub target_comp_id: String,
+    pub msg_seq_num: AtomicU64,
+}
+
+pub struct AdapterError {
+    pub error_code: u32, 
+    pub error_message: [u8; 64],
+}
+
+pub trait BrokerAdapter {
+    fn execute_order(&self, account: &AccountConfig, child: &ChildExecution) -> Result<ChildExecution, AdapterError>;
+    fn query_status(&self, child_id: &[u8; 16]) -> Result<ExecutionStatus, AdapterError>;
+}
+
+//impl BrokerAdapter for FixAdapter {}
+
+#[derive(Deserialize)]
+pub struct TradeLockerConfig {
+    pub tl_url: String,
+    pub tl_email: String,
+    pub tl_password: String,
+    pub tl_server: String,
+    pub tl_account_id: i64,
+    pub tl_acc_num: i8,
+}
+
+#[derive(Serialize)]
+pub struct LoginRequest {
+    pub email: String,
+    pub password: String,
+    pub server: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenResponse {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub expire_date: String,
+}
+
+impl LoginRequest {
+    
+    pub async fn tl_login(&self) -> Result<TokenResponse, Box<dyn Error>> {
+        let url = "https://demo.tradelocker.com/backend-api/auth/jwt/token";
+        let res = Client::new().post(url).json(self).send().await?;
+        let token_out: TokenResponse = res.json().await?;
+
+        Ok(token_out)
+    }
+}
+
+impl TokenResponse {
+    pub fn token (&self) -> String {
+        format!("Bearer {}", self.access_token)
+    }
+}
+
+pub fn load_config(path: &str) -> Result<HashMap<String, TradeLockerConfig>, Box<dyn Error>> {
+    let contents = std::fs::read_to_string(path)?;
+    let accounts: HashMap<String, TradeLockerConfig> = toml::from_str(&contents)?;
+    Ok(accounts)
 }
