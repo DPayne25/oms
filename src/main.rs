@@ -1,36 +1,59 @@
-use std::{error::Error, collections::HashMap};
-use oms::{LoginRequest, TokenResponse, load_config};
-fn main() {
-    println!("Hello, world!");
-}
+use trade_copier::tradelocker::{load_config, ensure_all_fresh};
+use reqwest::{Client};
+use std::{error::Error};
+use tokio;
 
-async fn add_to_main()-> Result<(), Box<dyn Error>> {
-    let accounts = load_config("config.toml")?;
-    let mut account_tokens: HashMap<String, TokenResponse> = HashMap::new();
+#[tokio::main]
+pub async fn main() -> Result<(), Box<dyn Error>> {
+    let client = Client::new();
 
-    for (account_name, config) in &accounts {
+    let mut accounts = load_config("config.toml")?;
+    
+    ensure_all_fresh(&mut accounts, &client).await;
 
-        let  login = LoginRequest {
-            email: config.tl_email.clone(),
-            password: config.tl_password.clone(),
-            server: config.tl_server.clone(),
-        };
 
-        let token = login.tl_login().await;
-
-        match token {
-            Ok(t) => {
-                account_tokens.insert(account_name.clone(), t);
-                println!("{} login successful", account_name)
-                                
-            }
-            Err(e) => {
-                println!("{} failed to login: {}", account_name, e);
-            }
+    for (account_name, account) in accounts.iter_mut() {
+        if let Err(e) = account.fetch_account_info(&client).await {
+            println!("{} failed to fetch account info: {}", account_name, e);
         }
 
+       if let Err(e) = account.fetch_instrument_info(&client).await {
+            println!("{} failed to fetch instrument info: {}", account_name, e);
+            if let Some(source) = e.source() {
+                println!(" caused by: {}", source);
+            }
+       }
     }
-
+    for (account_name, account) in accounts.iter_mut() {
+       if let Err(e) = account.fetch_order_history(&client).await {
+            println!("{} failed to fetch order history info: {}", account_name, e);
+            if let Some(source) = e.source() {
+                println!(" caused by: {}", source);
+            }
+        }
+    }
+    for (account_name, account) in accounts.iter_mut() {
+        if let Err(e) = account.fetch_config(&client).await {
+            println!("{} failed to fetch config info: {}", account_name, e);
+            if let Some(source) = e.source() {
+                println!(" caused by: {}", source);
+            }
+        }
+    }
+    for (account_name, account) in accounts.iter_mut() {
+        match account.zip_orders() {
+            Ok(zipped) => {
+                account.zipped_orders = Some(zipped);
+                
+                match account.group_position_id() {
+                    Ok(grouped) => {
+                        println!("{}: {} grouped positions", account_name, grouped.len());
+                    }
+                    Err(e) => println!("{} failed to group: {}", account_name, e),
+                }
+            }
+            Err(e) => println!("{} failed to zip orders: {}", account_name, e),
+        }
+    }
     Ok(())
-
 }
