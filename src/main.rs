@@ -1,4 +1,4 @@
-use trade_copier::tradelocker::{load_config, ensure_all_fresh};
+use oms::tradelocker::{load_config, ensure_all_fresh};
 use reqwest::{Client};
 use std::{error::Error};
 use tokio;
