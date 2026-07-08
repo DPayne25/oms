@@ -191,7 +191,7 @@ impl TLAccountState {
 
         let url = format!("https://demo.tradelocker.com/backend-api/trade/quotes?routeId={}&tradableInstrumentId={}", route_id, instrument_id);
 
-        let prices = client
+        let res = client
             .get(url)
             .bearer_auth(&token.access_token)
             .header("accept", "application/json")
@@ -199,6 +199,9 @@ impl TLAccountState {
             .send()
             .await?;
 
+        println!("status: {}", res.status());
+        let prices: CurrentPrices = res.json().await?;
+        
         Ok(prices)
     }
 
@@ -505,11 +508,12 @@ impl TradeSetup {
     }
 }
 
-pub trait RiskCalculator {
+pub trait _RiskCalculator {
     fn calculate_money_at_risk(&self, balance: Decimal) -> Decimal;
     fn calculate_pct_to_unit_size(&self, balance: Decimal) -> Decimal;
 }
 
+/*
 impl RiskCalculator for OrderIntent {
     fn calculate_money_at_risk(&self, balance: Decimal) -> Decimal {
         balance * self.trade_risk_percentage()
@@ -521,7 +525,7 @@ impl RiskCalculator for OrderIntent {
         (balance * self.trade_risk_percentage()) * (pip_distance.abs() * pip_value())
     }
 }
-
+*/
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrentPrices {
