@@ -160,7 +160,7 @@ impl TLAccountState {
     }
 
     //find tradable_intstrument_id
-    pub fn find_instrument_id(&self, target_name: &str) -> Result<i64, Box<dyn Error>> {
+    pub fn find_instrument_info(&self, target_name: &str) -> Result<(i64, i64), Box<dyn Error>> {
         let instruments = self.instruments.as_ref().ok_or("instrument data error")?;
         let instrument = instruments.iter()
             .find(|inst| inst.name == target_name)
@@ -169,7 +169,9 @@ impl TLAccountState {
         let route = instrument.routes.first()
             .ok_or_else(|| format!("no routes defined for instrument {}", target_name))?;
 
-        Ok(route.id)
+        let instrument_rid_tr_in_id = (route.id, instrument.tradable_instrument_id);
+
+        Ok(instrument_rid_tr_in_id)
     }
 
 }
@@ -460,7 +462,7 @@ pub enum TradeSetup {
 }
 
 impl TradeSetup {
-    pub fn risk_percentage(&self) -> Decimal {
+    pub fn trade_risk_percentage(&self) -> Decimal {
         match self {
             TradeSetup::JCP => rust_decimal_macros::dec!(0.002),
             TradeSetup::DipNDot => rust_decimal_macros::dec!(0.0071),
@@ -479,6 +481,14 @@ impl RiskCalculator for TradeSetup {
     }
 }
 
+#[derive(Serialize)]
+pub struct OrderIntent {
+    //pub price: Option<Decimal>, //Change to DECIMAL
+    pub setup: TradeSetup,
+    pub side: OrderSide,
+    pub stop_loss: Decimal,
+    pub take_profit: Decimal,
+}
 
 #[derive(Serialize)]
 pub struct NewOrder {
