@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error};
+use std::{str::FromStr, collections::HashMap, error::Error};
 use serde::{Serialize, Deserialize};
 use reqwest::Client;
 use rust_decimal::{prelude::FromPrimitive, Decimal};
@@ -160,18 +160,46 @@ impl TLAccountState {
     }
 
     //find tradable_intstrument_id
-    pub fn find_instrument_info(&self, target_name: &str) -> Result<(i64, i64), Box<dyn Error>> {
+    pub fn find_static_instrument_info(&self, instrument_name: &str) -> Result<(i64, i64), Box<dyn Error>> {
         let instruments = self.instruments.as_ref().ok_or("instrument data error")?;
         let instrument = instruments.iter()
-            .find(|inst| inst.name == target_name)
-            .ok_or_else(|| format!("no routes defined for instrument {}", target_name))?;
+            .find(|inst| inst.name == instrument_name)
+            .ok_or_else(|| format!("no routes defined for instrument {}", instrument_name))?;
 
         let route = instrument.routes.first()
-            .ok_or_else(|| format!("no routes defined for instrument {}", target_name))?;
+            .ok_or_else(|| format!("no routes defined for instrument {}", instrument_name))?;
 
-        let instrument_rid_tr_in_id = (route.id, instrument.tradable_instrument_id);
+        let instrument_route_id_tr_instrument_id = (route.id, instrument.tradable_instrument_id);
 
-        Ok(instrument_rid_tr_in_id)
+        Ok(instrument_route_id_tr_instrument_id)
+    }
+
+    //Account Balance
+    pub fn find_account_balance(&self) -> Result<Decimal, Box<dyn Error>> {
+        let acc_info = self.account_info.as_ref().ok_or("no account_info")?;
+
+        let balance:Decimal = Decimal::from_str(&acc_info.account_balance)?;
+
+        Ok(balance)
+    }
+
+    pub async fn get_current_prices(&self, client: &Client, instrument_name: &str) -> Result<CurrentPrices, Box<dyn Error>> {
+        let token = self.token.as_ref().ok_or("no token for this account")?;
+        let account = self.account_info.as_ref().ok_or("no account_info for this account")?;
+        let (route_id, instrument_id) = self.find_static_instrument_info(instrument_name)?;
+
+
+        let url = format!("https://demo.tradelocker.com/backend-api/trade/quotes?routeId={}&tradableInstrumentId={}", route_id, instrument_id);
+
+        let prices = client
+            .get(url)
+            .bearer_auth(&token.access_token)
+            .header("accept", "application/json")
+            .header("accNum", &account.acc_num)
+            .send()
+            .await?;
+
+        Ok(prices)
     }
 
 }
@@ -332,9 +360,10 @@ pub struct ConfigResponse {
 #[serde(rename_all = "camelCase")]
 pub struct ConfigData {
     pub orders_history_config: OrdersHistoryConfig,
+
     /*
-        pub account_details_config: AccountDetailsConfig,
-        pub customer_access: Vec<ColumnDef>,
+    pub account_details_config: AccountDetailsConfig,
+    pub customer_access: Vec<ColumnDef>,
         pub filled_orders_config: Vec<ColumnDef>,
         pub orders_config: Vec<ColumnDef>,
         pub poisitions_config: Vec<ColumnDef>,
@@ -354,6 +383,11 @@ pub struct AccountDetailsConfig {
     pub market_depth: bool,
 }
 */
+#[derive(Deserialize, Debug)]
+pub struct AccountDetailsConfig {
+    pub columns: Vec<ColumnDef>,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct OrdersHistoryConfig {
     pub columns: Vec<ColumnDef>,
@@ -472,13 +506,29 @@ impl TradeSetup {
 }
 
 pub trait RiskCalculator {
+    fn calculate_money_at_risk(&self, balance: Decimal) -> Decimal;
     fn calculate_pct_to_unit_size(&self, balance: Decimal) -> Decimal;
 }
 
-impl RiskCalculator for TradeSetup {
-    fn calculate_pct_to_unit_size(&self, balance: Decimal) -> Decimal {
-        balance * self.risk_percentage()
+impl RiskCalculator for OrderIntent {
+    fn calculate_money_at_risk(&self, balance: Decimal) -> Decimal {
+        balance * self.trade_risk_percentage()
     }
+
+    fn calculate_pct_to_unit_size(&self, balance: Decimal) -> Decimal {
+        //riskbalance * self.trade_risk_percentage()
+        let pip_distance = current_price() - stop_loss;
+        (balance * self.trade_risk_percentage()) * (pip_distance.abs() * pip_value())
+    }
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrentPrices {
+    pub ap: Decimal, //best ask price
+    pub _as: Decimal, //best ask size
+    pub bp: Decimal, //best bid price
+    pub bs: Decimal, //best ask size
 }
 
 #[derive(Serialize)]
@@ -489,6 +539,7 @@ pub struct OrderIntent {
     pub stop_loss: Decimal,
     pub take_profit: Decimal,
 }
+
 
 #[derive(Serialize)]
 pub struct NewOrder {
