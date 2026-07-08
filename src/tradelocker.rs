@@ -503,6 +503,33 @@ pub trait OrderExecutor {
     async fn place_new_order(&self, account: &TLAccountState, client: &Client) -> Result<serde_json::Value, Box<dyn Error>>;
 }
 
+impl OrderExecutor for NewOrder {
+    async fn place_new_order(&self, accounts: &TLAccountState, client: &Client) -> Result<serde_json::Value, Box<dyn Error>> {
+        let token = accounts.token.as_ref().ok_or("no token for this account")?;
+        let account = accounts.account_info.as_ref().ok_or("no account_id found for this account")?;
+                
+        let url = format!("https://demo.tradelocker.com/backend-api/trade/accounts/{}/orders", account.id);
+       
+        let res = client
+            .post(url)
+            .bearer_auth(&token.access_token)
+            .json(&self)
+            .header("accept", "application/json")
+            .header("accNum", &account.acc_num)
+            .header("content-type", "application/json")
+            .send()
+            .await?;
+
+        let status = res.status();
+
+        let response_payload: serde_json::Value = res.json().await?;
+        
+        println!("{}, {}", status, response_payload);
+        
+        Ok(response_payload)
+
+    }
+}
 
 //Free Functions
 
