@@ -1,7 +1,8 @@
 use std::{collections::HashMap, error::Error};
 use serde::{Serialize, Deserialize};
 use reqwest::Client;
-use rust_decimal::Decimal;
+use rust_decimal::{prelude::FromPrimitive, Decimal};
+use rust_decimal_macros;
 use chrono::{DateTime, Utc};
 
 #[derive(Debug)]
@@ -157,6 +158,20 @@ impl TLAccountState {
         }
         Ok(grouped)
     }
+
+    //find tradable_intstrument_id
+    pub fn find_instrument_id(&self, target_name: &str) -> Result<i64, Box<dyn Error>> {
+        let instruments = self.instruments.as_ref().ok_or("instrument data error")?;
+        let instrument = instruments.iter()
+            .find(|inst| inst.name == target_name)
+            .ok_or_else(|| format!("no routes defined for instrument {}", target_name))?;
+
+        let route = instrument.routes.first()
+            .ok_or_else(|| format!("no routes defined for instrument {}", target_name))?;
+
+        Ok(route.id)
+    }
+
 }
 
 
@@ -438,28 +453,50 @@ pub enum Validity {
 }
 
 #[derive(Serialize)]
-pub enum Setups {
+pub enum TradeSetup {
     JCP,
     DipNDot,
+    TestSetup
 }
+
+impl TradeSetup {
+    pub fn risk_percentage(&self) -> Decimal {
+        match self {
+            TradeSetup::JCP => rust_decimal_macros::dec!(0.002),
+            TradeSetup::DipNDot => rust_decimal_macros::dec!(0.0071),
+            TradeSetup::TestSetup => rust_decimal_macros::dec!(0.001,)
+        }
+    }
+}
+
+pub trait RiskCalculator {
+    fn calculate_pct_to_unit_size(&self, balance: Decimal) -> Decimal;
+}
+
+impl RiskCalculator for TradeSetup {
+    fn calculate_pct_to_unit_size(&self, balance: Decimal) -> Decimal {
+        balance * self.risk_percentage()
+    }
+}
+
 
 #[derive(Serialize)]
 pub struct NewOrder {
-    //pub price: Option<f64>, //Change to DECIMAL
-    pub qty: f64,
+    //pub price: Option<Decimal>, //Change to DECIMAL
+    pub qty: Decimal,
     pub route_id: i64,
-    pub side: OrderSide,
+    pub side: String,
     //pub strategy_id:Opition<String>,
-    pub stop_loss: f64,
-    pub stop_loss_type: StopLossType,
-    //pub stop_price: Option<f64>,
-    pub take_profit: f64,
-    pub take_profit_type: TakeProfitType,
+    pub stop_loss: Decimal,
+    pub stop_loss_type: String,
+    //pub stop_price: Option<Decimal>,
+    pub take_profit: Decimal,
+    pub take_profit_type: String,
     //pub tr_stop_offset: i64,
     pub tradable_instrument_id: i64,
     #[serde(rename = "type")]
-    pub kind: OrderType,
-    pub validity: Validity,
+    pub kind: String,
+    pub validity: String,
 }
 
 //Free Functions
@@ -486,4 +523,4 @@ pub async fn ensure_all_fresh(accounts: &mut HashMap<String, TLAccountState>, cl
     }
 }
 
-
+//pub async fn place_new_order() -> Result<(), Box<dyn Error>> {}

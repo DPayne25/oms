@@ -1,4 +1,4 @@
-use oms::tradelocker::{load_config, ensure_all_fresh};
+use oms::tradelocker::{ensure_all_fresh, load_config};
 use reqwest::{Client};
 use std::{error::Error};
 use tokio;
@@ -55,5 +55,6 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
             Err(e) => println!("{} failed to zip orders: {}", account_name, e),
         }
     }
+
     Ok(())
 }
