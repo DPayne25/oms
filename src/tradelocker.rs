@@ -499,6 +499,11 @@ pub struct NewOrder {
     pub validity: String,
 }
 
+pub trait OrderExecutor {
+    async fn place_new_order(&self, account: &TLAccountState, client: &Client) -> Result<serde_json::Value, Box<dyn Error>>;
+}
+
+
 //Free Functions
 
 //`load_config()` stores account login values into `TLAccountState` struct
