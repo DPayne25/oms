@@ -183,7 +183,7 @@ impl TLAccountState {
         Ok(balance)
     }
 
-    pub async fn get_current_prices(&self, client: &Client, instrument_name: &str) -> Result<CurrentPrices, Box<dyn Error>> {
+    pub async fn get_current_prices(&self, client: &Client, instrument_name: &str) -> Result<(), Box<dyn Error>> {
         let token = self.token.as_ref().ok_or("no token for this account")?;
         let account = self.account_info.as_ref().ok_or("no account_info for this account")?;
         let (route_id, instrument_id) = self.find_static_instrument_info(instrument_name)?;
@@ -199,10 +199,12 @@ impl TLAccountState {
             .send()
             .await?;
 
-        println!("status: {}", res.status());
-        let prices: CurrentPrices = res.json().await?;
+        println!("status: {}", &res.status());
+        let text = &res.text().await?;
+        //let prices: CurrentPrices = res.json().await?;
         
-        Ok(prices)
+        println!("prices: {}", text);
+        Ok(())
     }
 
 }
@@ -567,6 +569,7 @@ pub struct NewOrder {
 pub trait OrderExecutor {
     async fn place_new_order(&self, account: &TLAccountState, client: &Client) -> Result<serde_json::Value, Box<dyn Error>>;
 }
+
 
 impl OrderExecutor for NewOrder {
     async fn place_new_order(&self, accounts: &TLAccountState, client: &Client) -> Result<serde_json::Value, Box<dyn Error>> {
