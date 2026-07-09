@@ -208,7 +208,7 @@ impl TLAccountState {
         Ok(())
     }
 
-    pub async fn _place_new_order(&self, order: &NewOrder, client: &Client) -> Result<serde_json::Value, Box<dyn Error>> {
+    pub async fn place_new_order(&self, order: &NewOrder, client: &Client) -> Result<serde_json::Value, Box<dyn Error>> {
         let token = self.token.as_ref().ok_or("no token for this account")?;
         let account = self.account_info.as_ref().ok_or("no account_id found for this account")?;
                 
@@ -220,7 +220,6 @@ impl TLAccountState {
             .json(order)
             .header("accept", "application/json")
             .header("accNum", &account.acc_num)
-            .header("content-type", "application/json")
             .send()
             .await?;
 
@@ -575,10 +574,11 @@ pub struct OrderIntent {
 
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NewOrder {
     //pub price: Option<Decimal>, //Change to DECIMAL
     pub qty: Decimal,
-    pub route_id: i64,
+    pub route_id: i32,
     pub side: String,
     //pub strategy_id:Opition<String>,
     pub stop_loss: Decimal,
@@ -587,7 +587,7 @@ pub struct NewOrder {
     pub take_profit: Decimal,
     pub take_profit_type: String,
     //pub tr_stop_offset: i64,
-    pub tradable_instrument_id: i64,
+    pub tradable_instrument_id: i32,
     #[serde(rename = "type")]
     pub kind: String,
     pub validity: String,
