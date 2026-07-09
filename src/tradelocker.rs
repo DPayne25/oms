@@ -208,6 +208,31 @@ impl TLAccountState {
         Ok(())
     }
 
+    pub async fn _place_new_order(&self, order: &NewOrder, client: &Client) -> Result<serde_json::Value, Box<dyn Error>> {
+        let token = self.token.as_ref().ok_or("no token for this account")?;
+        let account = self.account_info.as_ref().ok_or("no account_id found for this account")?;
+                
+        let url = format!("https://demo.tradelocker.com/backend-api/trade/accounts/{}/orders", account.id);
+       
+        let res = client
+            .post(url)
+            .bearer_auth(&token.access_token)
+            .json(order)
+            .header("accept", "application/json")
+            .header("accNum", &account.acc_num)
+            .header("content-type", "application/json")
+            .send()
+            .await?;
+
+        let status = res.status();
+
+        let response_payload: serde_json::Value = res.json().await?;
+        
+        println!("{}, {}", status, response_payload);
+        
+        Ok(response_payload)
+    }
+
 }
 
 
@@ -527,8 +552,9 @@ impl RiskCalculator for OrderIntent {
         let pip_distance = current_price() - stop_loss;
         (balance * self.trade_risk_percentage()) * (pip_distance.abs() * pip_value())
     }
-}
+} 
 */
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrentPrices {
@@ -567,38 +593,10 @@ pub struct NewOrder {
     pub validity: String,
 }
 
-pub trait OrderExecutor {
-    async fn place_new_order(&self, account: &TLAccountState, client: &Client) -> Result<serde_json::Value, Box<dyn Error>>;
-}
+//pub trait OrderExecutor {    async fn place_new_order(&self, account: &TLAccountState, client: &Client) -> Result<serde_json::Value, Box<dyn Error>>;}
 
 
-impl OrderExecutor for NewOrder {
-    async fn place_new_order(&self, accounts: &TLAccountState, client: &Client) -> Result<serde_json::Value, Box<dyn Error>> {
-        let token = accounts.token.as_ref().ok_or("no token for this account")?;
-        let account = accounts.account_info.as_ref().ok_or("no account_id found for this account")?;
-                
-        let url = format!("https://demo.tradelocker.com/backend-api/trade/accounts/{}/orders", account.id);
-       
-        let res = client
-            .post(url)
-            .bearer_auth(&token.access_token)
-            .json(&self)
-            .header("accept", "application/json")
-            .header("accNum", &account.acc_num)
-            .header("content-type", "application/json")
-            .send()
-            .await?;
-
-        let status = res.status();
-
-        let response_payload: serde_json::Value = res.json().await?;
-        
-        println!("{}, {}", status, response_payload);
-        
-        Ok(response_payload)
-
-    }
-}
+//impl OrderExecutor for NewOrder {}}
 
 //Free Functions
 
