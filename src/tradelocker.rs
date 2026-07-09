@@ -160,7 +160,7 @@ impl TLAccountState {
     }
 
     //find tradable_intstrument_id and route_id
-    pub fn find_static_instrument_info(&self, instrument_name: &str) -> Result<(i64, i64), Box<dyn Error>> {
+    pub fn find_route_id_and_instrument_id(&self, instrument_name: &str) -> Result<(i64, i64), Box<dyn Error>> {
         let instruments = self.instruments.as_ref().ok_or("instrument data error")?;
 
         let instrument = instruments.iter()
@@ -175,6 +175,25 @@ impl TLAccountState {
         Ok(instrument_route_id_tr_instrument_id)
     }
 
+    //find unit value
+    pub async fn find_contract_unit_value(&self, order: &OrderIntent, client: &Client) -> Result<Decimal, Box<dyn Error>> {
+        let (route_id, instrument_id) = self.find_route_id_and_instrument_id(&order.instrument)?;
+        let url = format!("https://demo.tradelocker.com/backend-api/trade/instruments/{instrument_id}?routeId={route_id}&locale=en");
+        let token = self.token.as_ref().ok_or("no token for this account")?;
+        let account = self.account_info.as_ref().ok_or("no account_info for this account")?;
+
+        let res = client
+            .get(url)
+            .bearer_auth(&token.access_token)
+            .header("accept", "application/json")
+            .header("accNum", &account.acc_num)
+            .send()
+            .await?;
+        
+        let parsed: InstrumentDetailResponse = res.json().await?;
+        Ok(parsed.d.lot_size)
+    }
+
     //Account Balance
     pub fn find_account_balance(&self) -> Result<Decimal, Box<dyn Error>> {
         let acc_info = self.account_info.as_ref().ok_or("no account_info")?;
@@ -187,7 +206,7 @@ impl TLAccountState {
     pub async fn get_current_prices(&self, client: &Client, instrument_name: &str) -> Result<CurrentPrices, Box<dyn Error>> {
         let token = self.token.as_ref().ok_or("no token for this account")?;
         let account = self.account_info.as_ref().ok_or("no account_info for this account")?;
-        let (route_id, instrument_id) = self.find_static_instrument_info(instrument_name)?;
+        let (route_id, instrument_id) = self.find_route_id_and_instrument_id(instrument_name)?;
 
         let url = format!("https://demo.tradelocker.com/backend-api/trade/quotes?routeId={}&tradableInstrumentId={}", route_id, instrument_id);
 
@@ -247,9 +266,13 @@ impl TLAccountState {
     pub async fn calculate_lot_size(&self, order: &OrderIntent, client: &Client) -> Result<Decimal, Box<dyn Error>> {
         //riskbalance * self.trade_risk_percentage()
         let current_price = self.current_price(order, client).await?;
-        let pip_distance = current_price - order.stop_loss;
+        let pip_delta = current_price - order.stop_loss;
         let balance = self.find_account_balance()?;
-        (RiskCalculator::calculate_money_at_risk(order, &balance)) * (pip_distance.abs() * pip_value())
+        let risk = RiskCalculator::calculate_money_at_risk(order, balance);
+        let contract_unit_value = self.find_contract_unit_value(order, client).await?;
+        let lot_size = risk / (pip_delta.abs() * contract_unit_value);
+
+        Ok(lot_size)
     }
 
 }
@@ -605,6 +628,39 @@ pub struct NewOrder {
     #[serde(rename = "type")]
     pub kind: String,
     pub validity: String,
+}
+
+// Instrument Detail (single-instrument endpoint, not the list endpoint)
+#[derive(Deserialize, Debug)]
+pub struct InstrumentDetailResponse {
+    pub d: InstrumentDetail,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct InstrumentDetail {
+    pub base_currency: String,
+    pub quoting_currency: String,
+    pub lot_size: Decimal,
+    pub lot_step: Decimal,
+    pub min_lot: Decimal,
+    pub max_lot: Decimal,
+    pub tick_size: Vec<TickSizeTier>,
+    pub tick_cost: Vec<TickCostTier>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TickSizeTier {
+    pub left_range_limit: Decimal,
+    pub tick_size: Decimal,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TickCostTier {
+    pub left_range_limit: Decimal,
+    pub tick_cost: Decimal,
 }
 
 //pub trait OrderExecutor {    async fn place_new_order(&self, account: &TLAccountState, client: &Client) -> Result<serde_json::Value, Box<dyn Error>>;}

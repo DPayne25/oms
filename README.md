@@ -43,7 +43,7 @@ for after v1 works end-to-end on TradeLocker.
 - [ ] Given one `OrderIntent`, iterate all TradeLocker accounts concurrently
       (`tokio::spawn` per account)
 - [ ] Resolve `tradable_instrument_id` / `route_id` per account
-      (`find_static_instrument_info` exists — needs to be called in the dispatch path)
+      (`find_route_id_and_instrument_id` exists — needs to be called in the dispatch path)
 - [ ] Pull live entry price via `/trade/quotes` (`get_current_prices` exists but
       doesn't parse the response yet — still printing raw text)
 - [ ] Call `place_new_order` per account, collect results (success + failure) back

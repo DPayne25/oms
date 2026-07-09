@@ -91,8 +91,8 @@ date:  2026-07-03
 *The binary win condition that proves this specific decision has been successfully executed.*
 
 - [x] Print value of `NewOrder::qty` and manually check for correct value. -> lot size format "0.01", "1.23"
-- [x] Print value of `NewOrder::tradable_instrument_id` and manually check for correct stored value. -> extracted as a tuple in one function called `find_static_instrument_info`
-- [x] Print value of `NewOrder::route_id` and manually check for correct stored value. -> extracted as a tuple in one function called `find_static_instrument_info`
+- [x] Print value of `NewOrder::tradable_instrument_id` and manually check for correct stored value. -> extracted as a tuple in one function called `find_route_id_and_instrument_id`
+- [x] Print value of `NewOrder::route_id` and manually check for correct stored value. -> extracted as a tuple in one function called `find_route_id_and_instrument_id`
 - [x] 200 Request Code with expected output:
 	```json
 	{

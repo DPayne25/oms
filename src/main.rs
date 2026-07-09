@@ -25,7 +25,7 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
     let test_pair = "AUDCAD";
     
     for (account_name, account) in accounts.iter_mut() {
-        let (route_id, instrument_id) = account.find_static_instrument_info(&test_pair)?;
+        let (route_id, instrument_id) = account.find_route_id_and_instrument_id(&test_pair)?;
 
         println!("Account Name: {account_name}");
         println!("Pair: {test_pair} routeId: {route_id} instrumentId: {instrument_id}");
