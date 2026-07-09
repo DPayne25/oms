@@ -1,7 +1,7 @@
 use std::{str::FromStr, collections::HashMap, error::Error};
 use serde::{Serialize, Deserialize};
 use reqwest::Client;
-use rust_decimal::{prelude::FromPrimitive, Decimal};
+use rust_decimal::Decimal;
 use rust_decimal_macros;
 use chrono::{DateTime, Utc};
 
@@ -159,11 +159,12 @@ impl TLAccountState {
         Ok(grouped)
     }
 
-    //find tradable_intstrument_id
+    //find tradable_intstrument_id and route_id
     pub fn find_static_instrument_info(&self, instrument_name: &str) -> Result<(i64, i64), Box<dyn Error>> {
         let instruments = self.instruments.as_ref().ok_or("instrument data error")?;
+
         let instrument = instruments.iter()
-            .find(|inst| inst.name == instrument_name)
+            .find(|inst| inst.name.starts_with(instrument_name))
             .ok_or_else(|| format!("no routes defined for instrument {}", instrument_name))?;
 
         let route = instrument.routes.first()
