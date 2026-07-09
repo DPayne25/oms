@@ -1,5 +1,6 @@
-use oms::tradelocker::{ensure_all_fresh, load_config};
+use oms::tradelocker::{ensure_all_fresh, get_all_account_info, get_all_order_history_info, get_config_headers, load_config, zip_all_order_history};
 use reqwest::{Client};
+//use toml::value::Offset::Z;
 use std::{error::Error};
 use tokio;
 
@@ -11,50 +12,13 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
     
     ensure_all_fresh(&mut accounts, &client).await;
 
+    get_all_account_info(&mut accounts, &client).await;
 
-    for (account_name, account) in accounts.iter_mut() {
-        if let Err(e) = account.fetch_account_info(&client).await {
-            println!("{} failed to fetch account info: {}", account_name, e);
-        }
+    get_all_order_history_info(&mut accounts, &client).await;
 
-       if let Err(e) = account.fetch_instrument_info(&client).await {
-            println!("{} failed to fetch instrument info: {}", account_name, e);
-            if let Some(source) = e.source() {
-                println!(" caused by: {}", source);
-            }
-       }
-    }
-    for (account_name, account) in accounts.iter_mut() {
-       if let Err(e) = account.fetch_order_history(&client).await {
-            println!("{} failed to fetch order history info: {}", account_name, e);
-            if let Some(source) = e.source() {
-                println!(" caused by: {}", source);
-            }
-        }
-    }
-    for (account_name, account) in accounts.iter_mut() {
-        if let Err(e) = account.fetch_config(&client).await {
-            println!("{} failed to fetch config info: {}", account_name, e);
-            if let Some(source) = e.source() {
-                println!(" caused by: {}", source);
-            }
-        }
-    }
-    for (account_name, account) in accounts.iter_mut() {
-        match account.zip_orders() {
-            Ok(zipped) => {
-                account.zipped_orders = Some(zipped);
-                
-                match account.group_position_id() {
-                    Ok(grouped) => {
-                        println!("{}: {} grouped positions", account_name, grouped.len());
-                    }
-                    Err(e) => println!("{} failed to group: {}", account_name, e),
-                }
-            }
-            Err(e) => println!("{} failed to zip orders: {}", account_name, e),
-        }
-    }
+    get_config_headers(&mut accounts, &client).await;
+    
+    zip_all_order_history(&mut accounts).await;
 
     Ok(())
 }

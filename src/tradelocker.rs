@@ -624,3 +624,62 @@ pub async fn ensure_all_fresh(accounts: &mut HashMap<String, TLAccountState>, cl
 }
 
 //pub async fn place_new_order() -> Result<(), Box<dyn Error>> {}
+
+//GET all TradeLocker account info
+pub async fn get_all_account_info(accounts: &mut HashMap<String, TLAccountState>, client: &Client) {
+    for (account_name, account) in accounts.iter_mut() {
+        if let Err(e) = account.fetch_account_info(&client).await {
+            println!("{} failed to fetch account info: {}", account_name, e);
+        }
+
+       if let Err(e) = account.fetch_instrument_info(&client).await {
+            println!("{} failed to fetch instrument info: {}", account_name, e);
+            if let Some(source) = e.source() {
+                println!(" caused by: {}", source);
+            }
+       }
+    }
+}
+
+//GET all TradeLocker order history info
+pub async fn get_all_order_history_info(accounts: &mut HashMap<String, TLAccountState>, client: &Client) {
+    for (account_name, account) in accounts.iter_mut() {
+       if let Err(e) = account.fetch_order_history(&client).await {
+            println!("{} failed to fetch order history info: {}", account_name, e);
+            if let Some(source) = e.source() {
+                println!(" caused by: {}", source);
+            }
+        }
+    }
+}
+
+//GET api config headers
+pub async fn get_config_headers(accounts: &mut HashMap<String, TLAccountState>, client: &Client) {
+    for (account_name, account) in accounts.iter_mut() {
+        if let Err(e) = account.fetch_config(&client).await {
+            println!("{} failed to fetch config info: {}", account_name, e);
+            if let Some(source) = e.source() {
+                println!(" caused by: {}", source);
+            }
+        }
+    }
+}
+
+//Zip config headers with order history
+pub async fn zip_all_order_history(accounts: &mut HashMap<String, TLAccountState>) {
+    for (account_name, account) in accounts.iter_mut() {
+        match account.zip_orders() {
+            Ok(zipped) => {
+                account.zipped_orders = Some(zipped);
+                
+                match account.group_position_id() {
+                    Ok(grouped) => {
+                        println!("{}: {} grouped positions", account_name, grouped.len());
+                    }
+                    Err(e) => println!("{} failed to group: {}", account_name, e),
+                }
+            }
+            Err(e) => println!("{} failed to zip orders: {}", account_name, e),
+        }
+    }
+}
