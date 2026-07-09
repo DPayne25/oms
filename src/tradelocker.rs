@@ -184,11 +184,10 @@ impl TLAccountState {
         Ok(balance)
     }
 
-    pub async fn get_current_prices(&self, client: &Client, instrument_name: &str) -> Result<(), Box<dyn Error>> {
+    pub async fn get_current_prices(&self, client: &Client, instrument_name: &str) -> Result<CurrentPrices, Box<dyn Error>> {
         let token = self.token.as_ref().ok_or("no token for this account")?;
         let account = self.account_info.as_ref().ok_or("no account_info for this account")?;
         let (route_id, instrument_id) = self.find_static_instrument_info(instrument_name)?;
-
 
         let url = format!("https://demo.tradelocker.com/backend-api/trade/quotes?routeId={}&tradableInstrumentId={}", route_id, instrument_id);
 
@@ -200,12 +199,12 @@ impl TLAccountState {
             .send()
             .await?;
 
-        println!("status: {}", &res.status());
-        let text = &res.text().await?;
-        //let prices: CurrentPrices = res.json().await?;
-        
-        println!("prices: {}", text);
-        Ok(())
+        //println!("status: {}", &res.status());
+        //let text = &res.text().await?;
+        let prices = res.json().await?;
+        //println!("prices: {}", prices.clone());
+
+        Ok(prices)
     }
 
     pub async fn place_new_order(&self, order: &NewOrder, client: &Client) -> Result<serde_json::Value, Box<dyn Error>> {
@@ -230,6 +229,27 @@ impl TLAccountState {
         println!("{}, {}", status, response_payload);
         
         Ok(response_payload)
+    }
+
+    pub async fn current_price(&self, order: &OrderIntent, client: &Client) -> Result<Decimal, Box<dyn Error>> {
+        let instrument = order.instrument.as_ref();
+        let quotes = self.get_current_prices(client, instrument).await?;
+        
+        let price = match order.side {
+            OrderSide::Buy => quotes.ap,
+            OrderSide::Sell => quotes.bp,
+        };
+
+        Ok(price)
+
+    }
+
+    pub async fn calculate_lot_size(&self, order: &OrderIntent, client: &Client) -> Result<Decimal, Box<dyn Error>> {
+        //riskbalance * self.trade_risk_percentage()
+        let current_price = self.current_price(order, client).await?;
+        let pip_distance = current_price - order.stop_loss;
+        let balance = self.find_account_balance()?;
+        (RiskCalculator::calculate_money_at_risk(order, &balance)) * (pip_distance.abs() * pip_value())
     }
 
 }
@@ -535,24 +555,17 @@ impl TradeSetup {
     }
 }
 
-pub trait _RiskCalculator {
+pub trait RiskCalculator {
     fn calculate_money_at_risk(&self, balance: Decimal) -> Decimal;
-    fn calculate_pct_to_unit_size(&self, balance: Decimal) -> Decimal;
 }
 
-/*
+
 impl RiskCalculator for OrderIntent {
     fn calculate_money_at_risk(&self, balance: Decimal) -> Decimal {
-        balance * self.trade_risk_percentage()
-    }
-
-    fn calculate_pct_to_unit_size(&self, balance: Decimal) -> Decimal {
-        //riskbalance * self.trade_risk_percentage()
-        let pip_distance = current_price() - stop_loss;
-        (balance * self.trade_risk_percentage()) * (pip_distance.abs() * pip_value())
+        balance * self.setup.trade_risk_percentage()
     }
 } 
-*/
+
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -566,6 +579,7 @@ pub struct CurrentPrices {
 #[derive(Serialize)]
 pub struct OrderIntent {
     //pub price: Option<Decimal>, //Change to DECIMAL
+    pub instrument: String,
     pub setup: TradeSetup,
     pub side: OrderSide,
     pub stop_loss: Decimal,

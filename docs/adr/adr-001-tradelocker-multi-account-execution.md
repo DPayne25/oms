@@ -90,10 +90,10 @@ date:  2026-07-03
 ## 6. Acceptance Criteria
 *The binary win condition that proves this specific decision has been successfully executed.*
 
-- [ ] Print value of `NewOrder::qty` and manually check for correct value.
-- [ ] Print value of `NewOrder::tradable_instrument_id` and manually check for correct stored value.
-- [ ] Print value of `NewOrder::route_id` and manually check for correct stored value.
-- [ ] 200 Request Code with expected output:
+- [x] Print value of `NewOrder::qty` and manually check for correct value. -> lot size format "0.01", "1.23"
+- [x] Print value of `NewOrder::tradable_instrument_id` and manually check for correct stored value. -> extracted as a tuple in one function called `find_static_instrument_info`
+- [x] Print value of `NewOrder::route_id` and manually check for correct stored value. -> extracted as a tuple in one function called `find_static_instrument_info`
+- [x] 200 Request Code with expected output:
 	```json
 	{
   "d": {
@@ -102,4 +102,4 @@ date:  2026-07-03
   "s": "ok"
 }
 	```
-- [ ] The Tradelocker Desktop application reflects the intended order
+- [x] The Tradelocker Desktop application reflects the intended order
