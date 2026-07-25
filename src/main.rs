@@ -1,10 +1,12 @@
-use oms::tradelocker::{NewOrder, OrderIntent, OrderSide::Sell, TradeSetup::JCP, ensure_all_fresh, get_all_account_info, get_all_order_history_info, get_config_headers, load_config, zip_all_order_history};
+use oms::tradelocker::TradeSetup::DipNDot;
+use oms::tradelocker::{OrderIntent, OrderSide::Sell, ensure_all_fresh, get_all_account_info, get_all_order_history_info, get_config_headers, load_config};
 use reqwest::{Client};
 //use rust_decimal::{Decimal, prelude::FromPrimitive};
 use rust_decimal_macros::dec;
 //use toml::value::Offset::Z;
 use std::{error::Error};
 use tokio;
+use tokio::time::Duration;
 
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn Error>> {
@@ -20,17 +22,20 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
 
     get_config_headers(&mut accounts, &client).await;
     
-    zip_all_order_history(&mut accounts).await;
-
-    //let intent = read_order_intent()?;
-
-    //new_order(&mut accounts, &client, &intent).await?;
+    //zip_all_order_history(&mut accounts).await;
 
     let test_pair = "EURUSD";
-    let stop_price  = dec!(1.14730);
+   
+    for (_account_name, account) in accounts.iter_mut() {
+        let quotes = account.get_current_prices(&client, test_pair).await?;
+        println!("{:?}", quotes);
+    }
+   
+   
+   let stop_price  = dec!(1.14078);
     let take_profit = dec!(1.12757);
     //let lot = dec!(1.22);
-    let setup = JCP;
+    let setup = DipNDot;
     let side = Sell;
     //let price = dec!(1.64538);
 
@@ -43,7 +48,7 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
     };
 
     for (account_name, account) in accounts.iter_mut() {
-        let (route_id, instrument_id) = account.find_route_id_and_instrument_id(&test_pair)?;
+        let (route_id, instrument_id) = account.find_route_id_and_instrument_id(&test_pair, "TRADE")?;
 
         println!("Account Name: {account_name}");
         println!("Pair: {test_pair} routeId: {route_id} instrumentId: {instrument_id}");
@@ -51,10 +56,11 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
         let new_order = account.build_new_order(&order_intent, &client).await?;
     
         println!("{:?}", new_order);
+
+        tokio::time::sleep(Duration::from_millis(3000)).await;
     }
     /*
-    //let account = accounts.get("tradelocker-blueg-552");
-    let account = accounts.get("tradelocker-qtekel-982");
+
 
     match account {
         Some(a) => a.place_new_order(&order_intent, &client).await?,

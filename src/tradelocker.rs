@@ -1,10 +1,12 @@
 use std::{str::FromStr, collections::HashMap, error::Error};
 use serde::{Serialize, Deserialize};
+use serde_json;
 use reqwest::Client;
 use rust_decimal::{Decimal};
 use rust_decimal_macros;
 use chrono::{DateTime, Utc};
 //use std::io::{self, Write};
+use tokio::time::Duration;
 
 
 #[derive(Debug)]
@@ -163,15 +165,16 @@ impl TLAccountState {
     }
 
     //find tradable_intstrument_id and route_id
-    pub fn find_route_id_and_instrument_id(&self, instrument_name: &str) -> Result<(i32, i64), Box<dyn Error>> {
+    pub fn find_route_id_and_instrument_id(&self, instrument_name: &str, target_kind: &str) -> Result<(i32, i64), Box<dyn Error>> {
         let instruments = self.instruments.as_ref().ok_or("instrument data error")?;
 
         let instrument = instruments.iter()
             .find(|inst| inst.name.starts_with(instrument_name))
-            .ok_or_else(|| format!("no routes defined for instrument {}", instrument_name))?;
+            .ok_or_else(|| format!("no instrument found for {}", instrument_name))?;
 
-        let route = instrument.routes.first()
-            .ok_or_else(|| format!("no routes defined for instrument {}", instrument_name))?;
+        let route = instrument.routes.iter()
+            .find(|r| r.kind.eq_ignore_ascii_case(target_kind))
+            .ok_or_else(|| format!("no {} route defined for instrument {}", target_kind, instrument_name))?;
 
         let instrument_route_id_tr_instrument_id = (route.id, instrument.tradable_instrument_id);
 
@@ -180,7 +183,7 @@ impl TLAccountState {
 
     //find unit value
     pub async fn find_contract_unit_value(&self, order: &OrderIntent, client: &Client) -> Result<Decimal, Box<dyn Error>> {
-        let (route_id, instrument_id) = self.find_route_id_and_instrument_id(&order.instrument)?;
+        let (route_id, instrument_id) = self.find_route_id_and_instrument_id(&order.instrument, "INFO")?;
         let url = format!("https://demo.tradelocker.com/backend-api/trade/instruments/{instrument_id}?routeId={route_id}&locale=en");
         let token = self.token.as_ref().ok_or("no token for this account")?;
         let account = self.account_info.as_ref().ok_or("no account_info for this account")?;
@@ -193,13 +196,25 @@ impl TLAccountState {
             .send()
             .await?;
         
+        if !res.status().is_success() {
+            let status = res.status();
+            let text = res.text().await.unwrap_or_default();
+            return Err(format!("Instruments API rejected request: HTTP {} - Body: {}", status, text).into());
+        }
+
+        tokio::time::sleep(Duration::from_millis(3000)).await;
+
         let parsed: InstrumentDetailResponse = res.json().await?;
-        Ok(parsed.d.lot_size)
+        
+        // Safely unwrap the Option, throwing a descriptive error if the API returned null for lot_size
+        let lot_size = parsed.d.lot_size.ok_or("API returned null for lot_size")?;
+        
+        Ok(lot_size)
     }
 
     //Account Balance
     pub fn find_account_balance(&self) -> Result<Decimal, Box<dyn Error>> {
-        let acc_info = self.account_info.as_ref().ok_or("no account_info")?;
+        let acc_info = self.account_info.as_ref().ok_or("no account_info for calculating balance")?;
 
         let balance:Decimal = Decimal::from_str(&acc_info.account_balance)?;
 
@@ -209,8 +224,10 @@ impl TLAccountState {
     pub async fn get_current_prices(&self, client: &Client, instrument_name: &str) -> Result<QuotesResponse, Box<dyn Error>> {
         let token = self.token.as_ref().ok_or("no token for this account")?;
         let account = self.account_info.as_ref().ok_or("no account_info for this account")?;
-        let (route_id, instrument_id) = self.find_route_id_and_instrument_id(instrument_name)?;
-
+        let (route_id, instrument_id) = self.find_route_id_and_instrument_id(instrument_name, "INFO")?;
+        
+        tokio::time::sleep(Duration::from_millis(3000)).await;
+        
         let url = format!("https://demo.tradelocker.com/backend-api/trade/quotes?routeId={}&tradableInstrumentId={}", route_id, instrument_id);
 
         let res = client
@@ -221,10 +238,13 @@ impl TLAccountState {
             .send()
             .await?;
 
-        //println!("status: {}", &res.status());
-        //let text = &res.text().await?;
-        let prices = res.json().await?;
-        //self.instruments = Some(parsed.d.instruments);
+        /*if !res.status().is_success() {
+            let status = res.status();
+            let text = res.text().await.unwrap_or_default();
+            return Err(format!("Quotes API rejected request: HTTP {} - Body: {}", status, text).into());
+        }*/
+
+        let prices: QuotesResponse = res.json().await?;
 
         Ok(prices)
     }
@@ -259,17 +279,27 @@ impl TLAccountState {
 
     pub async fn current_price(&self, order: &OrderIntent, client: &Client) -> Result<Decimal, Box<dyn Error>> {
         let instrument = order.instrument.as_ref();
+
+        tokio::time::sleep(Duration::from_millis(3000)).await;
+
         let qres = self.get_current_prices(client, instrument).await?;
         
-        let quote = qres.d.into_iter().next().ok_or("no quotes returned from API")?;
+        // Attempt direct deserialization first. The payload 'd' is already the exact mapping we need.
+        let quote = if let Ok(q) = serde_json::from_value::<CurrentPrices>(qres.d.clone()) {
+            q
+        } else if let Some(arr) = qres.d.as_array() {
+            // Fallback just in case TradeLocker decides to wrap it in an array later
+            serde_json::from_value::<CurrentPrices>(arr.first().cloned().ok_or("Empty quotes array")?)?
+        } else {
+            return Err("Payload format unreadable: expected object or array".into());
+        };
 
         let price = match order.side {
             OrderSide::Buy => quote.ap,
             OrderSide::Sell => quote.bp,
         };
-
+    
         Ok(price)
-
     }
 
     pub async fn calculate_lot_size(&self, order: &OrderIntent, client: &Client) -> Result<Decimal, Box<dyn Error>> {
@@ -279,18 +309,18 @@ impl TLAccountState {
         let balance = self.find_account_balance()?;
         let risk = RiskCalculator::calculate_money_at_risk(order, balance);
         let contract_unit_value = self.find_contract_unit_value(order, client).await?;
-        let lot_size = risk / (pip_delta.abs() * contract_unit_value);
+        let lot_size = (risk / (pip_delta.abs() * contract_unit_value)).trunc_with_scale(2);
 
+        println!("Balance: {}, Risk: {}", balance, risk);
         Ok(lot_size)
     }
 
 //Convert OrderIntent to NewOrder market (order only)
     pub async fn build_new_order(&self, order_intent: &OrderIntent, client: &Client) -> Result<NewOrder, Box<dyn Error>>{
-        let(route_id, instrument_id) = self.find_route_id_and_instrument_id(&order_intent.instrument)?;
+        let(route_id, instrument_id) = self.find_route_id_and_instrument_id(&order_intent.instrument, "TRADE")?;
 
         let qty = self.calculate_lot_size(order_intent, client).await?;
-        let p_qty = &qty;
-        println!("{p_qty}");
+        
 
         let new_order = NewOrder {
             qty: qty,
@@ -642,7 +672,7 @@ impl RiskCalculator for OrderIntent {
 } 
 
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrentPrices {
     pub ap: Decimal, //best ask price
@@ -652,9 +682,9 @@ pub struct CurrentPrices {
     pub bs: Decimal, //best ask size
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct QuotesResponse {
-    pub d: Vec<CurrentPrices>,
+    pub d: serde_json::Value,
 }
 
 #[derive(Serialize, Debug)]
@@ -697,28 +727,28 @@ pub struct InstrumentDetailResponse {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct InstrumentDetail {
-    pub base_currency: String,
-    pub quoting_currency: String,
-    pub lot_size: Decimal,
-    pub lot_step: Decimal,
-    pub min_lot: Decimal,
-    pub max_lot: Decimal,
-    pub tick_size: Vec<TickSizeTier>,
-    pub tick_cost: Vec<TickCostTier>,
+    pub base_currency: Option<String>,
+    pub quoting_currency: Option<String>,
+    pub lot_size: Option<Decimal>,
+    pub lot_step: Option<Decimal>,
+    pub min_lot: Option<Decimal>,
+    pub max_lot: Option<Decimal>,
+    pub tick_size: Option<Vec<TickSizeTier>>,
+    pub tick_cost: Option<Vec<TickCostTier>>,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TickSizeTier {
-    pub left_range_limit: Decimal,
-    pub tick_size: Decimal,
+    pub left_range_limit: Option<Decimal>,
+    pub tick_size: Option<Decimal>,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TickCostTier {
-    pub left_range_limit: Decimal,
-    pub tick_cost: Decimal,
+    pub left_range_limit: Option<Decimal>,
+    pub tick_cost: Option<Decimal>,
 }
 
 //pub trait OrderExecutor {    async fn place_new_order(&self, account: &TLAccountState, client: &Client) -> Result<serde_json::Value, Box<dyn Error>>;}
@@ -743,9 +773,8 @@ pub fn load_config(path: &str) -> Result<HashMap<String, TLAccountState>, Box<dy
 pub async fn ensure_all_fresh(accounts: &mut HashMap<String, TLAccountState>, client: &Client) {
     // Login to accounts sourced from config.toml
     for (account_name, account) in accounts.iter_mut() {
-        match account.ensure_fresh_token(client).await {
-            Ok(()) => println!("{} token ready", account_name),
-            Err(e) => println!("{} failed: {}", account_name, e),
+            if let Err(e) = account.ensure_fresh_token(client).await { 
+                println!("{} token refresh failed: {}", account_name, e);
         }
     }
 }
