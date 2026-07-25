@@ -1,9 +1,11 @@
 use std::{str::FromStr, collections::HashMap, error::Error};
 use serde::{Serialize, Deserialize};
 use reqwest::Client;
-use rust_decimal::Decimal;
+use rust_decimal::{Decimal};
 use rust_decimal_macros;
 use chrono::{DateTime, Utc};
+//use std::io::{self, Write};
+
 
 #[derive(Debug)]
 pub struct TLAccountState {
@@ -14,6 +16,7 @@ pub struct TLAccountState {
     pub orders_history: Option<Vec<Vec<serde_json::Value>>>,
     pub tl_config: Option<ConfigData>,
     pub zipped_orders: Option<Vec<HashMap<String, serde_json::Value>>>,
+    pub quotes: Option<QuotesResponse>,
 }
 
 impl TLAccountState {
@@ -160,7 +163,7 @@ impl TLAccountState {
     }
 
     //find tradable_intstrument_id and route_id
-    pub fn find_route_id_and_instrument_id(&self, instrument_name: &str) -> Result<(i64, i64), Box<dyn Error>> {
+    pub fn find_route_id_and_instrument_id(&self, instrument_name: &str) -> Result<(i32, i64), Box<dyn Error>> {
         let instruments = self.instruments.as_ref().ok_or("instrument data error")?;
 
         let instrument = instruments.iter()
@@ -203,7 +206,7 @@ impl TLAccountState {
         Ok(balance)
     }
 
-    pub async fn get_current_prices(&self, client: &Client, instrument_name: &str) -> Result<CurrentPrices, Box<dyn Error>> {
+    pub async fn get_current_prices(&self, client: &Client, instrument_name: &str) -> Result<QuotesResponse, Box<dyn Error>> {
         let token = self.token.as_ref().ok_or("no token for this account")?;
         let account = self.account_info.as_ref().ok_or("no account_info for this account")?;
         let (route_id, instrument_id) = self.find_route_id_and_instrument_id(instrument_name)?;
@@ -221,21 +224,25 @@ impl TLAccountState {
         //println!("status: {}", &res.status());
         //let text = &res.text().await?;
         let prices = res.json().await?;
-        //println!("prices: {}", prices.clone());
+        //self.instruments = Some(parsed.d.instruments);
 
         Ok(prices)
     }
 
-    pub async fn place_new_order(&self, order: &NewOrder, client: &Client) -> Result<serde_json::Value, Box<dyn Error>> {
+    pub async fn place_new_order(&self, order_intent: &OrderIntent, client: &Client) -> Result<serde_json::Value, Box<dyn Error>> {
+        //self.ensure_fresh_token(client).await;
+
         let token = self.token.as_ref().ok_or("no token for this account")?;
         let account = self.account_info.as_ref().ok_or("no account_id found for this account")?;
-                
+
+        let order = self.build_new_order(order_intent, client).await?;
+
         let url = format!("https://demo.tradelocker.com/backend-api/trade/accounts/{}/orders", account.id);
        
         let res = client
             .post(url)
             .bearer_auth(&token.access_token)
-            .json(order)
+            .json(&order)
             .header("accept", "application/json")
             .header("accNum", &account.acc_num)
             .send()
@@ -245,18 +252,20 @@ impl TLAccountState {
 
         let response_payload: serde_json::Value = res.json().await?;
         
-        println!("{}, {}", status, response_payload);
+        println!("Status: {}, Order No.: {}", status, response_payload);
         
         Ok(response_payload)
     }
 
     pub async fn current_price(&self, order: &OrderIntent, client: &Client) -> Result<Decimal, Box<dyn Error>> {
         let instrument = order.instrument.as_ref();
-        let quotes = self.get_current_prices(client, instrument).await?;
+        let qres = self.get_current_prices(client, instrument).await?;
         
+        let quote = qres.d.into_iter().next().ok_or("no quotes returned from API")?;
+
         let price = match order.side {
-            OrderSide::Buy => quotes.ap,
-            OrderSide::Sell => quotes.bp,
+            OrderSide::Buy => quote.ap,
+            OrderSide::Sell => quote.bp,
         };
 
         Ok(price)
@@ -275,6 +284,28 @@ impl TLAccountState {
         Ok(lot_size)
     }
 
+//Convert OrderIntent to NewOrder market (order only)
+    pub async fn build_new_order(&self, order_intent: &OrderIntent, client: &Client) -> Result<NewOrder, Box<dyn Error>>{
+        let(route_id, instrument_id) = self.find_route_id_and_instrument_id(&order_intent.instrument)?;
+
+        let qty = self.calculate_lot_size(order_intent, client).await?;
+        let p_qty = &qty;
+        println!("{p_qty}");
+
+        let new_order = NewOrder {
+            qty: qty,
+            route_id: route_id,
+            side: order_intent.side.as_str().to_string(),
+            stop_loss: order_intent.stop_loss,
+            stop_loss_type: String::from("absolute"),
+            take_profit: order_intent.take_profit,
+            take_profit_type: String::from("absolute"),
+            tradable_instrument_id: instrument_id,
+            kind: String::from("market"),
+            validity: String::from("IOC"),
+        };
+        Ok(new_order)
+    }
 }
 
 
@@ -376,7 +407,7 @@ pub struct InstrumentData {
 
 #[derive(Deserialize, Debug)]
 pub struct Routes {
-    pub id: i64,
+    pub id: i32,
     #[serde(rename = "type")]
     pub kind: String,
 }
@@ -524,11 +555,32 @@ pub struct Trades {
 }
 
 //Place New Order
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum OrderSide {
     Buy,
     Sell,
+}
+
+impl OrderSide{
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OrderSide::Buy => "buy",
+            OrderSide::Sell => "sell",
+        }
+    }
+}
+
+impl FromStr for OrderSide {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "buy" => Ok(OrderSide::Buy),
+            "sell" => Ok(OrderSide::Sell),
+            other => Err(format!("invalid side '{other}', expected 'buy' or 'sell'")),
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -561,7 +613,7 @@ pub enum Validity {
     Ioc,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub enum TradeSetup {
     JCP,
     DipNDot,
@@ -594,12 +646,18 @@ impl RiskCalculator for OrderIntent {
 #[serde(rename_all = "camelCase")]
 pub struct CurrentPrices {
     pub ap: Decimal, //best ask price
+    #[serde(rename = "as")]
     pub _as: Decimal, //best ask size
     pub bp: Decimal, //best bid price
     pub bs: Decimal, //best ask size
 }
 
-#[derive(Serialize)]
+#[derive(Deserialize, Debug)]
+pub struct QuotesResponse {
+    pub d: Vec<CurrentPrices>,
+}
+
+#[derive(Serialize, Debug)]
 pub struct OrderIntent {
     //pub price: Option<Decimal>, //Change to DECIMAL
     pub instrument: String,
@@ -610,10 +668,10 @@ pub struct OrderIntent {
 }
 
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct NewOrder {
-    //pub price: Option<Decimal>, //Change to DECIMAL
+    //pub _price: Decimal, //Change to DECIMAL
     pub qty: Decimal,
     pub route_id: i32,
     pub side: String,
@@ -624,7 +682,7 @@ pub struct NewOrder {
     pub take_profit: Decimal,
     pub take_profit_type: String,
     //pub tr_stop_offset: i64,
-    pub tradable_instrument_id: i32,
+    pub tradable_instrument_id: i64,
     #[serde(rename = "type")]
     pub kind: String,
     pub validity: String,
@@ -677,7 +735,7 @@ pub fn load_config(path: &str) -> Result<HashMap<String, TLAccountState>, Box<dy
     let mut accounts: HashMap<String, TLAccountState> = HashMap::new();
 
     for (name, config) in configs {
-        accounts.insert(name, TLAccountState {config, token: None, account_info: None, instruments: None, orders_history: None, tl_config: None, zipped_orders: None});
+        accounts.insert(name, TLAccountState {config, token: None, account_info: None, instruments: None, orders_history: None, tl_config: None, zipped_orders: None, quotes: None});
     }
     Ok(accounts)
 }
@@ -752,3 +810,48 @@ pub async fn zip_all_order_history(accounts: &mut HashMap<String, TLAccountState
         }
     }
 }
+
+/*
+pub async fn new_order(accounts: &mut HashMap<String, TLAccountState>, client: &Client, intent: &OrderIntent) -> Result<(), Box<dyn Error>> {
+    for (name, account) in accounts.iter() {
+        let order = account.build_new_order(&intent, &client).await?;
+        match account.place_new_order(&order, &client).await {
+            Ok(resp) => println!("{name}: {resp}"),
+            Err(e)   => println!("{name} failed: {e}"),
+        }
+    }
+    Ok(())
+}
+*/
+
+
+/*
+pub fn build_order_intent() -> Result<OrderIntent, Box<dyn Error>> {
+    let instrument = prompt("Instrument (e.g. AUDCAD): ")?;
+
+    let side_input = prompt("Side (buy/sell): ")?;
+    let side = side_input.parse::<OrderSide>()?;
+
+    let stop_loss_input = prompt("Stop loss (e.g. 0.98478): ")?;
+    let stop_loss = Decimal::from_str(&stop_loss_input)?;
+
+    let take_profit_input = prompt("Take profit (e.g. 0.97833): ")?;
+    let take_profit = Decimal::from_str(&take_profit_input)?;
+
+    Ok(OrderIntent {
+        instrument,
+        setup: TradeSetup::TestSetup,
+        side,
+        stop_loss,
+        take_profit,
+    })
+}
+
+pub fn prompt(label: &str) -> Result<String, Box<dyn Error>> {
+    print!("{label}");
+    io::stdout().flush()?;
+    let mut buf = String::new();
+    io::stdin().read_line(&mut buf)?;
+    Ok(buf.trim().to_string())
+}
+    */
