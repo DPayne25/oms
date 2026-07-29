@@ -1,15 +1,24 @@
 use oms::tradelocker::TradeSetup::DipNDot;
 use oms::tradelocker::{OrderIntent, OrderSide::Sell, ensure_all_fresh, get_all_account_info, get_all_order_history_info, get_config_headers, load_config};
 use reqwest::{Client};
-//use rust_decimal::{Decimal, prelude::FromPrimitive};
 use rust_decimal_macros::dec;
-//use toml::value::Offset::Z;
-use std::{error::Error};
-use tokio;
-use tokio::time::Duration;
+use serde_json::json;
+use axum::{routing::{get, post}, extract::{State, Json}, response::{IntoResponse, Html}, Router};
+use std::{error::Error, sync::Arc};
+use tokio::{sync::Mutex, time::Duration};
+
+
+pub struct AppState {
+    pub accounts: Mutex<std::collections::HashMap<String, oms::tradelocker::TLAccountState>>,
+    pub client: reqwest::Client,
+}
+
 
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn Error>> {
+
+
+
     let client = Client::new();
 
     let mut accounts = load_config("config.toml")?;

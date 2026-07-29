@@ -585,7 +585,7 @@ pub struct Trades {
 }
 
 //Place New Order
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum OrderSide {
     Buy,
@@ -643,7 +643,8 @@ pub enum Validity {
     Ioc,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
 pub enum TradeSetup {
     JCP,
     DipNDot,
@@ -687,7 +688,7 @@ pub struct QuotesResponse {
     pub d: serde_json::Value,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct OrderIntent {
     //pub price: Option<Decimal>, //Change to DECIMAL
     pub instrument: String,
