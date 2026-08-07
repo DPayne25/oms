@@ -1,13 +1,13 @@
-use std::{str::FromStr, collections::HashMap, error::Error};
-use serde::{Serialize, Deserialize};
-use serde_json;
-use reqwest::Client;
-use rust_decimal::{Decimal};
-use rust_decimal_macros;
 use chrono::{DateTime, Utc};
-//use std::io::{self, Write};
+use reqwest::Client;
+use rust_decimal::Decimal;
+use rust_decimal_macros;
+use serde::{Deserialize, Serialize};
+use serde_json;
+use std::{collections::HashMap, error::Error, str::FromStr, env};
+use dotenvy::dotenv;
+//use std::io::{self, Write, Read};
 use tokio::time::Duration;
-
 
 #[derive(Debug)]
 pub struct TLAccountState {
@@ -55,7 +55,9 @@ impl TLAccountState {
 
         let parsed: AllAccountsResponse = res.json().await?;
 
-        let info = parsed.accounts.into_iter()
+        let info = parsed
+            .accounts
+            .into_iter()
             .next()
             .ok_or("no accounts returned")?;
 
@@ -65,8 +67,14 @@ impl TLAccountState {
 
     pub async fn fetch_instrument_info(&mut self, client: &Client) -> Result<(), Box<dyn Error>> {
         let token = self.token.as_ref().ok_or("no token for this account")?;
-        let account = self.account_info.as_ref().ok_or("no account_id found for this account")?;
-        let url = format!("https://demo.tradelocker.com/backend-api/trade/accounts/{}/instruments", account.id);
+        let account = self
+            .account_info
+            .as_ref()
+            .ok_or("no account_id found for this account")?;
+        let url = format!(
+            "https://demo.tradelocker.com/backend-api/trade/accounts/{}/instruments",
+            account.id
+        );
 
         let res = client
             .get(url)
@@ -85,8 +93,14 @@ impl TLAccountState {
 
     pub async fn fetch_order_history(&mut self, client: &Client) -> Result<(), Box<dyn Error>> {
         let token = self.token.as_ref().ok_or("no token for this account")?;
-        let account = self.account_info.as_ref().ok_or("no account_info for this account")?;
-        let url = format!("https://demo.tradelocker.com/backend-api/trade/accounts/{}/ordersHistory", account.id);
+        let account = self
+            .account_info
+            .as_ref()
+            .ok_or("no account_info for this account")?;
+        let url = format!(
+            "https://demo.tradelocker.com/backend-api/trade/accounts/{}/ordersHistory",
+            account.id
+        );
 
         let res = client
             .get(url)
@@ -103,30 +117,37 @@ impl TLAccountState {
 
     pub async fn fetch_config(&mut self, client: &Client) -> Result<(), Box<dyn Error>> {
         let token = self.token.as_ref().ok_or("no token for this account")?;
-        let account = self.account_info.as_ref().ok_or("no account_info for this account")?;
+        let account = self
+            .account_info
+            .as_ref()
+            .ok_or("no account_info for this account")?;
         let url = format!("https://demo.tradelocker.com/backend-api/trade/config");
+        dotenv()?;
 
         let res = client
             .get(url)
             .bearer_auth(&token.access_token)
             .header("accept", "application/json")
             .header("accNum", &account.acc_num)
+            .header("developer-api-key", env::var("TL_DEVELOPER_API_KEY")?)
             .send()
             .await?;
 
         let parsed: ConfigResponse = res.json().await?;
         self.tl_config = Some(parsed.d);
-        
+        println!("Config: \n {:?}", self.tl_config);
         Ok(())
     }
 
     pub fn zip_orders(&self) -> Result<Vec<HashMap<String, serde_json::Value>>, Box<dyn Error>> {
-        let columns = &self.tl_config
+        let columns = &self
+            .tl_config
             .as_ref()
             .ok_or("tl_config not loaded")?
             .orders_history_config
             .columns;
-        let rows = self.orders_history
+        let rows = self
+            .orders_history
             .as_ref()
             .ok_or("ordres_history not loadeed")?;
 
@@ -140,17 +161,20 @@ impl TLAccountState {
                     .collect::<HashMap<String, serde_json::Value>>()
             })
             .collect();
-        
+
         Ok(zipped)
     }
 
-    pub fn group_position_id(&self) -> Result<HashMap<String, Vec<HashMap<String, serde_json::Value>>>, Box<dyn Error>> {
-        let zipped_orders = self.zipped_orders
+    pub fn group_position_id(
+        &self,
+    ) -> Result<HashMap<String, Vec<HashMap<String, serde_json::Value>>>, Box<dyn Error>> {
+        let zipped_orders = self
+            .zipped_orders
             .as_ref()
             .ok_or("zipped_orders not loaded")?;
 
         let mut grouped: HashMap<String, Vec<HashMap<String, serde_json::Value>>> = HashMap::new();
-        
+
         for row in zipped_orders {
             let position_id = match row.get("positionId").and_then(|v| v.as_str()) {
                 Some(id) => id.to_string(),
@@ -165,16 +189,28 @@ impl TLAccountState {
     }
 
     //find tradable_intstrument_id and route_id
-    pub fn find_route_id_and_instrument_id(&self, instrument_name: &str, target_kind: &str) -> Result<(i32, i64), Box<dyn Error>> {
+    pub fn find_route_id_and_instrument_id(
+        &self,
+        instrument_name: &str,
+        target_kind: &str,
+    ) -> Result<(i32, i64), Box<dyn Error>> {
         let instruments = self.instruments.as_ref().ok_or("instrument data error")?;
 
-        let instrument = instruments.iter()
+        let instrument = instruments
+            .iter()
             .find(|inst| inst.name.starts_with(instrument_name))
             .ok_or_else(|| format!("no instrument found for {}", instrument_name))?;
 
-        let route = instrument.routes.iter()
+        let route = instrument
+            .routes
+            .iter()
             .find(|r| r.kind.eq_ignore_ascii_case(target_kind))
-            .ok_or_else(|| format!("no {} route defined for instrument {}", target_kind, instrument_name))?;
+            .ok_or_else(|| {
+                format!(
+                    "no {} route defined for instrument {}",
+                    target_kind, instrument_name
+                )
+            })?;
 
         let instrument_route_id_tr_instrument_id = (route.id, instrument.tradable_instrument_id);
 
@@ -182,11 +218,21 @@ impl TLAccountState {
     }
 
     //find unit value
-    pub async fn find_contract_unit_value(&self, order: &OrderIntent, client: &Client) -> Result<Decimal, Box<dyn Error>> {
-        let (route_id, instrument_id) = self.find_route_id_and_instrument_id(&order.instrument, "INFO")?;
-        let url = format!("https://demo.tradelocker.com/backend-api/trade/instruments/{instrument_id}?routeId={route_id}&locale=en");
+    pub async fn find_contract_unit_value(
+        &self,
+        order: &OrderIntent,
+        client: &Client,
+    ) -> Result<Decimal, Box<dyn Error>> {
+        let (route_id, instrument_id) =
+            self.find_route_id_and_instrument_id(&order.instrument, "INFO")?;
+        let url = format!(
+            "https://demo.tradelocker.com/backend-api/trade/instruments/{instrument_id}?routeId={route_id}&locale=en"
+        );
         let token = self.token.as_ref().ok_or("no token for this account")?;
-        let account = self.account_info.as_ref().ok_or("no account_info for this account")?;
+        let account = self
+            .account_info
+            .as_ref()
+            .ok_or("no account_info for this account")?;
 
         let res = client
             .get(url)
@@ -195,40 +241,58 @@ impl TLAccountState {
             .header("accNum", &account.acc_num)
             .send()
             .await?;
-        
+
         if !res.status().is_success() {
             let status = res.status();
             let text = res.text().await.unwrap_or_default();
-            return Err(format!("Instruments API rejected request: HTTP {} - Body: {}", status, text).into());
+            return Err(format!(
+                "Instruments API rejected request: HTTP {} - Body: {}",
+                status, text
+            )
+            .into());
         }
 
         tokio::time::sleep(Duration::from_millis(3000)).await;
 
         let parsed: InstrumentDetailResponse = res.json().await?;
-        
+
         // Safely unwrap the Option, throwing a descriptive error if the API returned null for lot_size
         let lot_size = parsed.d.lot_size.ok_or("API returned null for lot_size")?;
-        
+
         Ok(lot_size)
     }
 
     //Account Balance
     pub fn find_account_balance(&self) -> Result<Decimal, Box<dyn Error>> {
-        let acc_info = self.account_info.as_ref().ok_or("no account_info for calculating balance")?;
+        let acc_info = self
+            .account_info
+            .as_ref()
+            .ok_or("no account_info for calculating balance")?;
 
-        let balance:Decimal = Decimal::from_str(&acc_info.account_balance)?;
+        let balance: Decimal = Decimal::from_str(&acc_info.account_balance)?;
 
         Ok(balance)
     }
 
-    pub async fn get_current_prices(&self, client: &Client, instrument_name: &str) -> Result<QuotesResponse, Box<dyn Error>> {
+    pub async fn get_current_prices(
+        &self,
+        client: &Client,
+        instrument_name: &str,
+    ) -> Result<QuotesResponse, Box<dyn Error>> {
         let token = self.token.as_ref().ok_or("no token for this account")?;
-        let account = self.account_info.as_ref().ok_or("no account_info for this account")?;
-        let (route_id, instrument_id) = self.find_route_id_and_instrument_id(instrument_name, "INFO")?;
-        
+        let account = self
+            .account_info
+            .as_ref()
+            .ok_or("no account_info for this account")?;
+        let (route_id, instrument_id) =
+            self.find_route_id_and_instrument_id(instrument_name, "INFO")?;
+
         tokio::time::sleep(Duration::from_millis(3000)).await;
-        
-        let url = format!("https://demo.tradelocker.com/backend-api/trade/quotes?routeId={}&tradableInstrumentId={}", route_id, instrument_id);
+
+        let url = format!(
+            "https://demo.tradelocker.com/backend-api/trade/quotes?routeId={}&tradableInstrumentId={}",
+            route_id, instrument_id
+        );
 
         let res = client
             .get(url)
@@ -249,47 +313,64 @@ impl TLAccountState {
         Ok(prices)
     }
 
-    pub async fn place_new_order(&self, order_intent: &OrderIntent, client: &Client) -> Result<serde_json::Value, Box<dyn Error>> {
+    pub async fn place_new_order(
+        &self,
+        order_intent: &OrderIntent,
+        client: &Client,
+    ) -> Result<serde_json::Value, Box<dyn Error>> {
         //self.ensure_fresh_token(client).await;
 
         let token = self.token.as_ref().ok_or("no token for this account")?;
-        let account = self.account_info.as_ref().ok_or("no account_id found for this account")?;
+        let account = self
+            .account_info
+            .as_ref()
+            .ok_or("no account_id found for this account")?;
 
         let order = self.build_new_order(order_intent, client).await?;
 
-        let url = format!("https://demo.tradelocker.com/backend-api/trade/accounts/{}/orders", account.id);
-       
+        let url = format!(
+            "https://demo.tradelocker.com/backend-api/trade/accounts/{}/orders",
+            account.id
+        );
+
         let res = client
             .post(url)
             .bearer_auth(&token.access_token)
             .json(&order)
             .header("accept", "application/json")
             .header("accNum", &account.acc_num)
+            .header("developer-api-key", "")
             .send()
             .await?;
 
         let status = res.status();
 
         let response_payload: serde_json::Value = res.json().await?;
-        
+
         println!("Status: {}, Order No.: {}", status, response_payload);
-        
+
         Ok(response_payload)
     }
 
-    pub async fn current_price(&self, order: &OrderIntent, client: &Client) -> Result<Decimal, Box<dyn Error>> {
+    pub async fn current_price(
+        &self,
+        order: &OrderIntent,
+        client: &Client,
+    ) -> Result<Decimal, Box<dyn Error>> {
         let instrument = order.instrument.as_ref();
 
         tokio::time::sleep(Duration::from_millis(3000)).await;
 
         let qres = self.get_current_prices(client, instrument).await?;
-        
+
         // Attempt direct deserialization first. The payload 'd' is already the exact mapping we need.
         let quote = if let Ok(q) = serde_json::from_value::<CurrentPrices>(qres.d.clone()) {
             q
         } else if let Some(arr) = qres.d.as_array() {
             // Fallback just in case TradeLocker decides to wrap it in an array later
-            serde_json::from_value::<CurrentPrices>(arr.first().cloned().ok_or("Empty quotes array")?)?
+            serde_json::from_value::<CurrentPrices>(
+                arr.first().cloned().ok_or("Empty quotes array")?,
+            )?
         } else {
             return Err("Payload format unreadable: expected object or array".into());
         };
@@ -298,11 +379,15 @@ impl TLAccountState {
             OrderSide::Buy => quote.ap,
             OrderSide::Sell => quote.bp,
         };
-    
+
         Ok(price)
     }
 
-    pub async fn calculate_lot_size(&self, order: &OrderIntent, client: &Client) -> Result<Decimal, Box<dyn Error>> {
+    pub async fn calculate_lot_size(
+        &self,
+        order: &OrderIntent,
+        client: &Client,
+    ) -> Result<Decimal, Box<dyn Error>> {
         //riskbalance * self.trade_risk_percentage()
         let current_price = self.current_price(order, client).await?;
         let pip_delta = current_price - order.stop_loss;
@@ -315,12 +400,16 @@ impl TLAccountState {
         Ok(lot_size)
     }
 
-//Convert OrderIntent to NewOrder market (order only)
-    pub async fn build_new_order(&self, order_intent: &OrderIntent, client: &Client) -> Result<NewOrder, Box<dyn Error>>{
-        let(route_id, instrument_id) = self.find_route_id_and_instrument_id(&order_intent.instrument, "TRADE")?;
+    //Convert OrderIntent to NewOrder market (order only)
+    pub async fn build_new_order(
+        &self,
+        order_intent: &OrderIntent,
+        client: &Client,
+    ) -> Result<NewOrder, Box<dyn Error>> {
+        let (route_id, instrument_id) =
+            self.find_route_id_and_instrument_id(&order_intent.instrument, "TRADE")?;
 
         let qty = self.calculate_lot_size(order_intent, client).await?;
-        
 
         let new_order = NewOrder {
             qty: qty,
@@ -337,7 +426,6 @@ impl TLAccountState {
         Ok(new_order)
     }
 }
-
 
 #[derive(Deserialize, Debug)]
 pub struct TradeLockerConfig {
@@ -379,13 +467,15 @@ pub struct RefreshRequest {
 }
 
 impl TokenResponse {
-    pub fn bearer_auth (&self) -> Result<String, Box<dyn Error>> {
+    pub fn bearer_auth(&self) -> Result<String, Box<dyn Error>> {
         let bearer_auth = format!("Bearer {}", self.access_token);
         Ok(bearer_auth)
     }
 
-    pub async fn check_token(&self, client: &Client) -> Result<Option<TokenResponse>, Box<dyn Error>> {
-
+    pub async fn check_token(
+        &self,
+        client: &Client,
+    ) -> Result<Option<TokenResponse>, Box<dyn Error>> {
         let expire_date = DateTime::parse_from_rfc3339(&self.expire_date)?;
         let now = Utc::now();
         let seconds_remaining = (expire_date.with_timezone(&Utc) - now).num_seconds();
@@ -432,7 +522,7 @@ pub struct InstrumentResponse {
 
 #[derive(Deserialize, Debug)]
 pub struct InstrumentData {
-    pub instruments: Vec<InstrumentInfo>
+    pub instruments: Vec<InstrumentInfo>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -473,7 +563,7 @@ pub struct InstrumentInfo {
 // Order History
 #[derive(Deserialize, Debug)]
 pub struct OrderHistoryResponse {
-    pub d: OrderHistoryData
+    pub d: OrderHistoryData,
 }
 
 #[derive(Deserialize, Debug)]
@@ -494,16 +584,16 @@ pub struct ConfigResponse {
 #[serde(rename_all = "camelCase")]
 pub struct ConfigData {
     pub orders_history_config: OrdersHistoryConfig,
-
     /*
     pub account_details_config: AccountDetailsConfig,
     pub customer_access: Vec<ColumnDef>,
         pub filled_orders_config: Vec<ColumnDef>,
         pub orders_config: Vec<ColumnDef>,
         pub poisitions_config: Vec<ColumnDef>,
-        pub rate_limits: Vec<ColumnDef>,
-        pub limits: Vec<ColumnDef>,
     */
+    pub rate_limits: Vec<ColumnDef>,
+    pub limits: Vec<ColumnDef>,
+    
 }
 /*
 #[derive(Deserialize, Debug)]
@@ -592,7 +682,7 @@ pub enum OrderSide {
     Sell,
 }
 
-impl OrderSide{
+impl OrderSide {
     pub fn as_str(&self) -> &'static str {
         match self {
             OrderSide::Buy => "buy",
@@ -648,7 +738,7 @@ pub enum Validity {
 pub enum TradeSetup {
     JCP,
     DipNDot,
-    TestSetup
+    TestSetup,
 }
 
 impl TradeSetup {
@@ -656,7 +746,7 @@ impl TradeSetup {
         match self {
             TradeSetup::JCP => rust_decimal_macros::dec!(0.002),
             TradeSetup::DipNDot => rust_decimal_macros::dec!(0.0071),
-            TradeSetup::TestSetup => rust_decimal_macros::dec!(0.001,)
+            TradeSetup::TestSetup => rust_decimal_macros::dec!(0.001,),
         }
     }
 }
@@ -665,13 +755,11 @@ pub trait RiskCalculator {
     fn calculate_money_at_risk(&self, balance: Decimal) -> Decimal;
 }
 
-
 impl RiskCalculator for OrderIntent {
     fn calculate_money_at_risk(&self, balance: Decimal) -> Decimal {
         balance * self.setup.trade_risk_percentage()
     }
-} 
-
+}
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -697,7 +785,6 @@ pub struct OrderIntent {
     pub stop_loss: Decimal,
     pub take_profit: Decimal,
 }
-
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -754,7 +841,6 @@ pub struct TickCostTier {
 
 //pub trait OrderExecutor {    async fn place_new_order(&self, account: &TLAccountState, client: &Client) -> Result<serde_json::Value, Box<dyn Error>>;}
 
-
 //impl OrderExecutor for NewOrder {}}
 
 //Free Functions
@@ -766,7 +852,19 @@ pub fn load_config(path: &str) -> Result<HashMap<String, TLAccountState>, Box<dy
     let mut accounts: HashMap<String, TLAccountState> = HashMap::new();
 
     for (name, config) in configs {
-        accounts.insert(name, TLAccountState {config, token: None, account_info: None, instruments: None, orders_history: None, tl_config: None, zipped_orders: None, quotes: None});
+        accounts.insert(
+            name,
+            TLAccountState {
+                config,
+                token: None,
+                account_info: None,
+                instruments: None,
+                orders_history: None,
+                tl_config: None,
+                zipped_orders: None,
+                quotes: None,
+            },
+        );
     }
     Ok(accounts)
 }
@@ -774,8 +872,8 @@ pub fn load_config(path: &str) -> Result<HashMap<String, TLAccountState>, Box<dy
 pub async fn ensure_all_fresh(accounts: &mut HashMap<String, TLAccountState>, client: &Client) {
     // Login to accounts sourced from config.toml
     for (account_name, account) in accounts.iter_mut() {
-            if let Err(e) = account.ensure_fresh_token(client).await { 
-                println!("{} token refresh failed: {}", account_name, e);
+        if let Err(e) = account.ensure_fresh_token(client).await {
+            println!("{} token refresh failed: {}", account_name, e);
         }
     }
 }
@@ -789,19 +887,22 @@ pub async fn get_all_account_info(accounts: &mut HashMap<String, TLAccountState>
             println!("{} failed to fetch account info: {}", account_name, e);
         }
 
-       if let Err(e) = account.fetch_instrument_info(&client).await {
+        if let Err(e) = account.fetch_instrument_info(&client).await {
             println!("{} failed to fetch instrument info: {}", account_name, e);
             if let Some(source) = e.source() {
                 println!(" caused by: {}", source);
             }
-       }
+        }
     }
 }
 
 //GET all TradeLocker order history info
-pub async fn get_all_order_history_info(accounts: &mut HashMap<String, TLAccountState>, client: &Client) {
+pub async fn get_all_order_history_info(
+    accounts: &mut HashMap<String, TLAccountState>,
+    client: &Client,
+) {
     for (account_name, account) in accounts.iter_mut() {
-       if let Err(e) = account.fetch_order_history(&client).await {
+        if let Err(e) = account.fetch_order_history(&client).await {
             println!("{} failed to fetch order history info: {}", account_name, e);
             if let Some(source) = e.source() {
                 println!(" caused by: {}", source);
@@ -828,7 +929,7 @@ pub async fn zip_all_order_history(accounts: &mut HashMap<String, TLAccountState
         match account.zip_orders() {
             Ok(zipped) => {
                 account.zipped_orders = Some(zipped);
-                
+
                 match account.group_position_id() {
                     Ok(grouped) => {
                         println!("{}: {} grouped positions", account_name, grouped.len());
@@ -839,6 +940,17 @@ pub async fn zip_all_order_history(accounts: &mut HashMap<String, TLAccountState
             Err(e) => println!("{} failed to zip orders: {}", account_name, e),
         }
     }
+}
+
+pub async fn build_order_intent(instrument:String, side: OrderSide, setup: TradeSetup, stop_loss: Decimal, take_profit: Decimal) -> OrderIntent {
+    let order_intent: OrderIntent = OrderIntent {
+        instrument: instrument,
+        setup: setup,
+        side: side,
+        stop_loss: stop_loss,
+        take_profit: take_profit,
+    };
+    return order_intent
 }
 
 /*
@@ -853,7 +965,6 @@ pub async fn new_order(accounts: &mut HashMap<String, TLAccountState>, client: &
     Ok(())
 }
 */
-
 
 /*
 pub fn build_order_intent() -> Result<OrderIntent, Box<dyn Error>> {
