@@ -2,7 +2,7 @@ use reqwest::Client;
 use std::{error::Error, };
 //use tokio::{sync::Mutex};
 mod tradelocker;
-use tradelocker::auth::{load_config, refresh_all_tokens};
+use tradelocker::auth::{load_config, refresh_all_tokens, list_all_accounts};
 
 
 /*pub struct AppState {
@@ -17,6 +17,8 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
     let mut accounts = load_config("config.toml")?;
 
     refresh_all_tokens(&mut accounts, &client).await;
+
+    list_all_accounts(&mut accounts, &client).await;
  /*
     get_all_account_info(&mut accounts, &client).await;
 

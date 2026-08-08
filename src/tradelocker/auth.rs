@@ -8,7 +8,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 //use serde_json;
 use std::{collections::HashMap, error::Error, str::FromStr, env};
-//use dotenvy::dotenv;
+use dotenvy::dotenv;
 //use std::io::{self, Write, Read};
 //use tokio::time::Duration;
 
@@ -18,7 +18,7 @@ use std::{collections::HashMap, error::Error, str::FromStr, env};
 ////////////////////////////////////////////////////////////
 
 
-//`load_config()` stores account login values into `TLAccountState` struct
+// Stores account login values into `TLAccountState` struct
 pub fn load_config(path: &str) -> Result<HashMap<String, TLAccountState>, Box<dyn Error>> {
     let contents = std::fs::read_to_string(path)?;
     let configs: HashMap<String, TradeLockerConfig> = toml::from_str(&contents)?;
@@ -30,8 +30,8 @@ pub fn load_config(path: &str) -> Result<HashMap<String, TLAccountState>, Box<dy
             TLAccountState {
                 config,
                 token: None,
-                /*account_info: None,
-                instruments: None,
+                account_info: None,
+                /*instruments: None,
                 orders_history: None,
                 tl_config: None,
                 zipped_orders: None,
@@ -42,11 +42,22 @@ pub fn load_config(path: &str) -> Result<HashMap<String, TLAccountState>, Box<dy
     Ok(accounts)
 }
 
+// Refreshes tokens
 pub async fn refresh_all_tokens(accounts: &mut HashMap<String, TLAccountState>, client: &Client) {
     // Login to accounts sourced from config.toml
     for (account_name, account) in accounts.iter_mut() {
         if let Err(e) = account.ensure_fresh_token(client).await {
             println!("{} token refresh failed: {}", account_name, e);
+        }
+    }
+}
+
+
+// List all account details
+pub async fn list_all_accounts(accounts: &mut HashMap<String, TLAccountState>, client: &Client) {
+    for (account_name, account) in accounts.iter_mut() {
+        if let Err(e) = account.state_list_all_accounts(client).await {
+            println!("{} list all accounts failed: {}", account_name, e);
         }
     }
 }
@@ -75,6 +86,7 @@ pub struct LoginRequest {
     pub server: String,
 }
 
+// Stores response of fetch_jwt_token()
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenResponse {
@@ -120,12 +132,31 @@ pub struct RefreshRequest {
     refresh_token: String,
 }
 
+
+// Stores Account Info
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountInfo {
+    pub id: String,
+    pub name: String,
+    pub currency: String,
+    pub acc_num: String,
+    pub account_balance: String,
+    pub status: String,
+}
+
+// Account Details
+#[derive(Deserialize, Debug)]
+pub struct AllAccountsResponse {
+    accounts: Vec<AccountInfo>,
+}
+
 // Manages TradeLocker state
 #[derive(Debug)]
 pub struct TLAccountState {
     pub config: TradeLockerConfig,
     pub token: Option<TokenResponse>,
-//   pub account_info: Option<AccountInfo>,
+    pub account_info: Option<AccountInfo>,
 //    pub instruments: Option<Vec<InstrumentInfo>>,
 //    pub orders_history: Option<Vec<Vec<serde_json::Value>>>,
 //    pub config_data: Option<ConfigData>,
@@ -135,6 +166,7 @@ pub struct TLAccountState {
 
 impl TLAccountState {
 
+    // Fetches JWT Token
     pub async fn fetch_jwt_token(&self, login_req: &LoginRequest, client: &Client) -> Result<TokenResponse, Box<dyn Error>> {
         let url = format!("{}auth/jwt/token", self.config.tl_url); // Placed here
         let res = client.post(url).json(login_req).send().await?;
@@ -143,6 +175,7 @@ impl TLAccountState {
         Ok(token_out)
     }
 
+    // Ensures token is fresh
     pub async fn ensure_fresh_token(&mut self, client: &Client) -> Result<(), Box<dyn Error>> {
         match &self.token {
             None => {
@@ -152,7 +185,6 @@ impl TLAccountState {
                     server: self.config.tl_server.clone(),
                 };
                 let new_token = self.fetch_jwt_token(&login, client).await?;
-                println!("Access token: {}", new_token.access_token);
                 self.token = Some(new_token);
             }
             Some(token) => {
@@ -163,7 +195,59 @@ impl TLAccountState {
         }
         Ok(())
     }
+
+    // List all accounts
+    pub async fn state_list_all_accounts(&mut self, client: &Client) -> Result<(), Box<dyn Error>> {
+        let token = self.token.as_ref().ok_or("no token for this account")?;
+        let url = format!("{}auth/jwt/all-accounts", self.config.tl_url);
+
+        let res = client
+            .get(url)
+            .bearer_auth(&token.access_token)
+            .header("accept", "application/json")
+            .send()
+            .await?;
+
+        let parsed: AllAccountsResponse = res.json().await?;
+        println!("{:#?}", parsed);
+
+        let info = parsed
+            .accounts
+            .into_iter()
+            .next()
+            .ok_or("no accounts returned")?;
+
+        self.account_info = Some(info);
+        Ok(())
+    }
+
+
 /*
+    // Get configuration
+    pub async fn get_configuration(&mut self, client: &Client) -> Result<(), Box<dyn Error>> {
+        let token = self.token.as_ref().ok_or("no token for this account")?;
+        let account = self
+            .account_info
+            .as_ref()
+            .ok_or("no account_info for this account")?;
+        let url = format!("https://demo.tradelocker.com/backend-api/trade/config");
+        dotenv()?;
+
+        let res = client
+            .get(url)
+            .bearer_auth(&token.access_token)
+            .header("accept", "application/json")
+            .header("accNum", &account.acc_num)
+            .header("developer-api-key", env::var("TL_DEVELOPER_API_KEY")?)
+            .send()
+            .await?;
+
+        let parsed: ConfigResponse = res.json().await?;
+        self.config_data = Some(parsed.d);
+        println!("Config: \n {:?}", self.config_data);
+        Ok(())
+    }
+
     pub async fn fetch_account_info(&mut self, client: &Client) -> Result<(), Box<dyn Error>> {
         let token = self.token.as_ref().ok_or("no token for this account")?;
         let url = "https://demo.tradelocker.com/backend-api/auth/jwt/all-accounts";
@@ -237,29 +321,6 @@ impl TLAccountState {
         Ok(())
     }
 
-    pub async fn fetch_config(&mut self, client: &Client) -> Result<(), Box<dyn Error>> {
-        let token = self.token.as_ref().ok_or("no token for this account")?;
-        let account = self
-            .account_info
-            .as_ref()
-            .ok_or("no account_info for this account")?;
-        let url = format!("https://demo.tradelocker.com/backend-api/trade/config");
-        dotenv()?;
-
-        let res = client
-            .get(url)
-            .bearer_auth(&token.access_token)
-            .header("accept", "application/json")
-            .header("accNum", &account.acc_num)
-            .header("developer-api-key", env::var("TL_DEVELOPER_API_KEY")?)
-            .send()
-            .await?;
-
-        let parsed: ConfigResponse = res.json().await?;
-        self.config_data = Some(parsed.d);
-        println!("Config: \n {:?}", self.config_data);
-        Ok(())
-    }
 
     pub fn zip_orders(&self) -> Result<Vec<HashMap<String, serde_json::Value>>, Box<dyn Error>> {
         let columns = &self
