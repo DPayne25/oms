@@ -33,15 +33,6 @@ pub struct LoginRequest {
     pub server: String,
 }
 
-impl LoginRequest {
-    pub async fn tl_login(&self, client: &Client) -> Result<TokenResponse, Box<dyn Error>> {
-        let url = format!("{}auth/jwt/token",);
-        let res = client.post(url).json(self).send().await?;
-        let token_out: TokenResponse = res.json().await?;
-
-        Ok(token_out)
-    }
-}
 
 // Manages TradeLocker state
 #[derive(Debug)]
@@ -58,8 +49,8 @@ pub struct TLAccountState {
 
 impl TLAccountState {
 
-    pub async fn tl_login(&self, login_req: LoginRequest, client: &Client) -> Result<TokenResponse, Box<dyn Error>> {
-        let url = format!("{}auth/jwt/token", self.config.tl_url);
+    pub async fn fetch_jwt_token(&self, login_req: LoginRequest, client: &Client) -> Result<TokenResponse, Box<dyn Error>> {
+        let url = format!("{self.config.tl_url}auth/jwt/token"); // Placed here
         let res = client.post(url).json(login_req).send().await?;
         let token_out: TokenResponse = res.json().await?;
 
@@ -74,7 +65,7 @@ impl TLAccountState {
                     password: self.config.tl_password.clone(),
                     server: self.config.tl_server.clone(),
                 };
-                let new_token = login.tl_login(client).await?;
+                let new_token = self.fetch_jwt_token(login, client).await?;
                 self.token = Some(new_token);
             }
             Some(token) => {
