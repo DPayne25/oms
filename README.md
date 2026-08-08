@@ -35,18 +35,18 @@ for after v1 works end-to-end on TradeLocker.
 - [x] `group_position_id` — groups zipped rows by `positionId`
 
 **Risk engine** — not started
-- [ ] `calculate_pct_to_unit_size` (or lot size equivalent) — turn
+- [x] `calculate_pct_to_unit_size` (or lot size equivalent) — turn
       `(balance, risk_pct, entry_price, stop_loss)` into a qty per account
-- [ ] Wire the result into `NewOrder.qty` (currently unset/hardcoded in test calls)
+- [-] Wire the result into `NewOrder.qty` (currently unset/hardcoded in test calls)
 
 **Execution fan-out** — not started ← **you are here**
 - [ ] Given one `OrderIntent`, iterate all TradeLocker accounts concurrently
       (`tokio::spawn` per account)
-- [ ] Resolve `tradable_instrument_id` / `route_id` per account
+- [x] Resolve `tradable_instrument_id` / `route_id` per account
       (`find_route_id_and_instrument_id` exists — needs to be called in the dispatch path)
-- [ ] Pull live entry price via `/trade/quotes` (`get_current_prices` exists but
+- [x] Pull live entry price via `/trade/quotes` (`get_current_prices` exists but
       doesn't parse the response yet — still printing raw text)
-- [ ] Call `place_new_order` per account, collect results (success + failure) back
+- [x] Call `place_new_order` per account, collect results (success + failure) back
       on the main task
 - [ ] Decide: `join_all` vs `JoinSet` for handling a hung/slow broker connection
       without blocking the others
@@ -117,7 +117,7 @@ Target (v1 execution fan-out, in progress):
 
 | Broker      | Protocol                  | Status                                      |
 |-------------|----------------------------|----------------------------------------------|
-| TradeLocker | JSON REST + Bearer token   | Auth, account/instrument fetch, order history, order placement implemented. Fan-out dispatcher in progress. |
+| TradeLocker | JSON REST + Bearer token   |    Fan-out dispatcher in progress. |
 | Oanda       | REST v20 JSON / WebSocket  | Not started                                   |
 | MatchTrader | —                          | Not started                                   |
 | DXTrade     | —                          | Not started                                   |
