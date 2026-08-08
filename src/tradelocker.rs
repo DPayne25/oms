@@ -591,10 +591,81 @@ pub struct ConfigData {
         pub orders_config: Vec<ColumnDef>,
         pub poisitions_config: Vec<ColumnDef>,
     */
-    pub rate_limits: Vec<ColumnDef>,
+    pub rate_limits: RateLimitType,
     pub limits: Vec<ColumnDef>,
     
 }
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RateLimit {
+    pub rate_limit_type: RateLimitType,
+    pub measure: RateLimitMeasure,
+    pub interval_num: u32,
+    pub limit: u32,
+}
+
+#[derive(Deserialize, Debug)]
+pub enum RateLimitType {
+    #[serde(rename = "GET_ACCOUNTS")]
+    GetAccounts,
+    #[serde(rename = "GET_EXECUTIONS")]
+    GetExecutions,
+    #[serde(rename = "PLACE_ORDER")]
+    PlaceOrder,
+    #[serde(rename = "GET_INSTRUMENTS")]
+    GetInstuments,
+    #[serde(rename = "GET_ORDERS")]
+    GetOrders,
+    #[serde(rename = "GET_ORDERS_HISTORY")]
+    GetOrdersHistory,
+    #[serde(rename = "GET_POSITIONS")]
+    GetPositions,
+    #[serde(rename = "GET_ACCOUNTS_STATE")]
+    GetAccountsState,
+    #[serde(rename = "GET_INSTRUMENT_DETAILS")]
+    GetInstrumentDetails,
+    #[serde(rename = "GET_TRADE_SESSIONS")]
+    GetTradeSessions,
+    #[serde(rename = "GET_SESSION_STATUSES")]
+    GetSessionStatuses,
+    #[serde(rename = "MODIFY_ORDER")]
+    ModifyOrder,
+    #[serde(rename = "MODIFY_POSITION")]
+    ModifyPosition,
+    #[serde(rename = "DAILY_BAR")]
+    DailyBar,
+    #[serde(rename = "QUOTES")]
+    Quotes,
+    #[serde(rename = "DEPTH")]
+    Depth,
+    #[serde(rename = "TRADES")]
+    Trades,
+    #[serde(rename = "QUOTES_HISTORY")]
+    QuotesHistory,
+    // ... one variant per rateLimitType value in the payload
+}
+
+#[derive(Deserialize, Debug)]
+pub enum RateLimitMeasure {
+    #[serde(rename = "SECONDS")]
+    Seconds,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Limit {
+    pub limit_type: LimitType,
+    pub limit: u32,
+}
+
+#[derive(Deserialize, Debug)]
+pub enum LimitType {
+    #[serde(rename = "QUOTES_HISTORY_BARS")]
+    QuotesHistoryBars,
+    #[serde(rename = "MAX_ORDERS_COUNT_IN_HISTORY")]
+    MaxOrdersCountInHistory,
+}
+
 /*
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
