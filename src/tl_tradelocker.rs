@@ -22,7 +22,7 @@ pub struct TLAccountState {
 }
 
 impl TLAccountState {
-    pub async fn ensure_fresh_token(&mut self, client: &Client) -> Result<(), Box<dyn Error>> {
+    pub async fn tl_ensure_fresh_token(&mut self, client: &Client) -> Result<(), Box<dyn Error>> {
         match &self.token {
             None => {
                 let login = LoginRequest {
@@ -943,7 +943,7 @@ pub fn load_config(path: &str) -> Result<HashMap<String, TLAccountState>, Box<dy
 pub async fn ensure_all_fresh(accounts: &mut HashMap<String, TLAccountState>, client: &Client) {
     // Login to accounts sourced from config.toml
     for (account_name, account) in accounts.iter_mut() {
-        if let Err(e) = account.ensure_fresh_token(client).await {
+        if let Err(e) = account.tl_ensure_fresh_token(client).await {
             println!("{} token refresh failed: {}", account_name, e);
         }
     }

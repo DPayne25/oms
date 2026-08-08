@@ -1,6 +1,16 @@
 ////////////////////////////////////////////////////////////
 // Auth for TradeLocker Public API
 ////////////////////////////////////////////////////////////
+use chrono::{DateTime, Utc};
+use reqwest::Client;
+use rust_decimal::Decimal;
+//use rust_decimal_macros;
+use serde::{Deserialize, Serialize};
+//use serde_json;
+use std::{collections::HashMap, error::Error, str::FromStr, env};
+//use dotenvy::dotenv;
+//use std::io::{self, Write, Read};
+//use tokio::time::Duration;
 
 
 ////////////////////////////////////////////////////////////
@@ -8,6 +18,38 @@
 ////////////////////////////////////////////////////////////
 
 
+//`load_config()` stores account login values into `TLAccountState` struct
+pub fn load_config(path: &str) -> Result<HashMap<String, TLAccountState>, Box<dyn Error>> {
+    let contents = std::fs::read_to_string(path)?;
+    let configs: HashMap<String, TradeLockerConfig> = toml::from_str(&contents)?;
+    let mut accounts: HashMap<String, TLAccountState> = HashMap::new();
+
+    for (name, config) in configs {
+        accounts.insert(
+            name,
+            TLAccountState {
+                config,
+                token: None,
+                /*account_info: None,
+                instruments: None,
+                orders_history: None,
+                tl_config: None,
+                zipped_orders: None,
+                quotes: None,*/
+            },
+        );
+    }
+    Ok(accounts)
+}
+
+pub async fn refresh_all_tokens(accounts: &mut HashMap<String, TLAccountState>, client: &Client) {
+    // Login to accounts sourced from config.toml
+    for (account_name, account) in accounts.iter_mut() {
+        if let Err(e) = account.ensure_fresh_token(client).await {
+            println!("{} token refresh failed: {}", account_name, e);
+        }
+    }
+}
 
 
 ////////////////////////////////////////////////////////////
@@ -33,24 +75,68 @@ pub struct LoginRequest {
     pub server: String,
 }
 
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenResponse {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub expire_date: String,
+}
+
+impl TokenResponse {
+    pub fn bearer_auth(&self) -> Result<String, Box<dyn Error>> {
+        let bearer_auth = format!("Bearer {}", self.access_token);
+        Ok(bearer_auth)
+    }
+
+    pub async fn check_token(
+        &self,
+        base_url: &str,
+        client: &Client,
+    ) -> Result<Option<TokenResponse>, Box<dyn Error>> {
+        let expire_date = DateTime::parse_from_rfc3339(&self.expire_date)?;
+        let now = Utc::now();
+        let seconds_remaining = (expire_date.with_timezone(&Utc) - now).num_seconds();
+
+        if seconds_remaining > 300 {
+            return Ok(None);
+        }
+
+        let url = format!("{}auth/jwt/refresh", base_url);
+
+        let payload = RefreshRequest {
+            refresh_token: self.refresh_token.clone(),
+        };
+
+        let res = client.post(url).json(&payload).send().await?;
+        let new_token: TokenResponse = res.json().await?;
+
+        Ok(Some(new_token))
+    }
+}
+
+#[derive(Serialize)]
+pub struct RefreshRequest {
+    refresh_token: String,
+}
 
 // Manages TradeLocker state
 #[derive(Debug)]
 pub struct TLAccountState {
     pub config: TradeLockerConfig,
     pub token: Option<TokenResponse>,
-    pub account_info: Option<AccountInfo>,
-    pub instruments: Option<Vec<InstrumentInfo>>,
-    pub orders_history: Option<Vec<Vec<serde_json::Value>>>,
-    pub config_data: Option<ConfigData>,
-    pub zipped_orders: Option<Vec<HashMap<String, serde_json::Value>>>,
-    pub quotes: Option<QuotesResponse>,
+//   pub account_info: Option<AccountInfo>,
+//    pub instruments: Option<Vec<InstrumentInfo>>,
+//    pub orders_history: Option<Vec<Vec<serde_json::Value>>>,
+//    pub config_data: Option<ConfigData>,
+//    pub zipped_orders: Option<Vec<HashMap<String, serde_json::Value>>>,
+//    pub quotes: Option<QuotesResponse>,
 }
 
 impl TLAccountState {
 
-    pub async fn fetch_jwt_token(&self, login_req: LoginRequest, client: &Client) -> Result<TokenResponse, Box<dyn Error>> {
-        let url = format!("{self.config.tl_url}auth/jwt/token"); // Placed here
+    pub async fn fetch_jwt_token(&self, login_req: &LoginRequest, client: &Client) -> Result<TokenResponse, Box<dyn Error>> {
+        let url = format!("{}auth/jwt/token", self.config.tl_url); // Placed here
         let res = client.post(url).json(login_req).send().await?;
         let token_out: TokenResponse = res.json().await?;
 
@@ -65,18 +151,19 @@ impl TLAccountState {
                     password: self.config.tl_password.clone(),
                     server: self.config.tl_server.clone(),
                 };
-                let new_token = self.fetch_jwt_token(login, client).await?;
+                let new_token = self.fetch_jwt_token(&login, client).await?;
+                println!("Access token: {}", new_token.access_token);
                 self.token = Some(new_token);
             }
             Some(token) => {
-                if let Some(new_token) = token.check_token(client).await? {
+                if let Some(new_token) = token.check_token(&self.config.tl_url, client).await? {
                     self.token = Some(new_token);
                 }
             }
         }
         Ok(())
     }
-
+/*
     pub async fn fetch_account_info(&mut self, client: &Client) -> Result<(), Box<dyn Error>> {
         let token = self.token.as_ref().ok_or("no token for this account")?;
         let url = "https://demo.tradelocker.com/backend-api/auth/jwt/all-accounts";
@@ -459,6 +546,6 @@ impl TLAccountState {
             validity: String::from("IOC"),
         };
         Ok(new_order)
-    }
+    }*/
 }
 
