@@ -345,11 +345,11 @@ impl TLAccountState {
                     password: self.config.tl_password.clone(),
                     server: self.config.tl_server.clone(),
                 };
-                let new_token = login.fetch_jwt_token(client).await?;
+                let new_token = login.fetch_jwt_token(&self.config.tl_url, client).await?;
                 self.token = Some(new_token);
             }
             Some(token) => {
-                if let Some(new_token) = token.check_token(client).await? {
+                if let Some(new_token) = token.check_token(&self.config.tl_url, client).await? {
                     self.token = Some(new_token);
                 }
             }
@@ -359,7 +359,7 @@ impl TLAccountState {
 
     pub async fn fetch_account_info(&mut self, client: &Client) -> Result<(), Box<dyn Error>> {
         let token = self.token.as_ref().ok_or("no token for this account")?;
-        let url = "https://demo.tradelocker.com/backend-api/auth/jwt/all-accounts";
+        let url = format!("{}auth/jwt/all-accounts", self.config.tl_url);
 
         let res = client
             .get(url)
@@ -387,7 +387,8 @@ impl TLAccountState {
             .as_ref()
             .ok_or("no account_id found for this account")?;
         let url = format!(
-            "https://demo.tradelocker.com/backend-api/trade/accounts/{}/instruments",
+            "{}trade/accounts/{}/instruments",
+            &self.config.tl_url,
             account.id
         );
 
@@ -413,7 +414,8 @@ impl TLAccountState {
             .as_ref()
             .ok_or("no account_info for this account")?;
         let url = format!(
-            "https://demo.tradelocker.com/backend-api/trade/accounts/{}/ordersHistory",
+            "{}trade/accounts/{}/ordersHistory",
+            &self.config.tl_url,
             account.id
         );
 
@@ -436,7 +438,7 @@ impl TLAccountState {
             .account_info
             .as_ref()
             .ok_or("no account_info for this account")?;
-        let url = format!("https://demo.tradelocker.com/backend-api/trade/config");
+        let url = format!("{}trade/config", &self.config.tl_url,);
         dotenv()?;
 
         let res = client
@@ -444,7 +446,6 @@ impl TLAccountState {
             .bearer_auth(&token.access_token)
             .header("accept", "application/json")
             .header("accNum", &account.acc_num)
-            .header("developer-api-key", env::var("TL_DEVELOPER_API_KEY")?)
             .send()
             .await?;
 
@@ -541,7 +542,8 @@ impl TLAccountState {
         let (route_id, instrument_id) =
             self.find_route_id_and_instrument_id(&order.instrument, "INFO")?;
         let url = format!(
-            "https://demo.tradelocker.com/backend-api/trade/instruments/{instrument_id}?routeId={route_id}&locale=en"
+            "{}trade/instruments/{instrument_id}?routeId={route_id}&locale=en",
+            &self.config.tl_url,
         );
         let token = self.token.as_ref().ok_or("no token for this account")?;
         let account = self
@@ -605,8 +607,8 @@ impl TLAccountState {
         tokio::time::sleep(Duration::from_millis(3000)).await;
 
         let url = format!(
-            "https://demo.tradelocker.com/backend-api/trade/quotes?routeId={}&tradableInstrumentId={}",
-            route_id, instrument_id
+            "{}trade/quotes?routeId={route_id}&tradableInstrumentId={instrument_id}",
+            &self.config.tl_url,
         );
 
         let res = client
@@ -644,7 +646,8 @@ impl TLAccountState {
         let order = self.build_new_order(order_intent, client).await?;
 
         let url = format!(
-            "https://demo.tradelocker.com/backend-api/trade/accounts/{}/orders",
+            "{}trade/accounts/{}/orders",
+            &self.config.tl_url,
             account.id
         );
 
@@ -758,22 +761,22 @@ pub struct LoginRequest {
     pub server: String,
 }
 
+impl LoginRequest {
+    pub async fn fetch_jwt_token(&self, base_url: &str, client: &Client) -> Result<TokenResponse, Box<dyn Error>> {
+        let url = format!("{}auth/jwt/token", base_url);
+        let res = client.post(url).json(self).send().await?;
+        let token_out: TokenResponse = res.json().await?;
+
+        Ok(token_out)
+    }
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenResponse {
     pub access_token: String,
     pub refresh_token: String,
     pub expire_date: String,
-}
-
-impl LoginRequest {
-    pub async fn fetch_jwt_token(&self, client: &Client) -> Result<TokenResponse, Box<dyn Error>> {
-        let url = "https://demo.tradelocker.com/backend-api/auth/jwt/token";
-        let res = client.post(url).json(self).send().await?;
-        let token_out: TokenResponse = res.json().await?;
-
-        Ok(token_out)
-    }
 }
 
 #[derive(Serialize)]
@@ -789,6 +792,7 @@ impl TokenResponse {
 
     pub async fn check_token(
         &self,
+        base_url: &str,
         client: &Client,
     ) -> Result<Option<TokenResponse>, Box<dyn Error>> {
         let expire_date = DateTime::parse_from_rfc3339(&self.expire_date)?;
@@ -799,7 +803,7 @@ impl TokenResponse {
             return Ok(None);
         }
 
-        let url = "https://demo.tradelocker.com/backend-api/auth/jwt/refresh";
+        let url = format!("{}auth/jwt/refresh", base_url);
 
         let payload = RefreshRequest {
             refresh_token: self.refresh_token.clone(),
