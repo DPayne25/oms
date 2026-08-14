@@ -744,10 +744,10 @@ impl TLAccountState {
 
 #[derive(Deserialize, Debug)]
 pub struct TradeLockerConfig {
-    pub tl_url: String, // duplicated
+    pub tl_url: String,
     pub tl_email: String,
     pub tl_password: String,
-    pub tl_server: String, // duplicated
+    pub tl_server: String,
     pub tl_account_id: String,
 }
 
