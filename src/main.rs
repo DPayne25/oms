@@ -4,7 +4,7 @@ use axum::{
     response::{Html, IntoResponse},
     routing::{get, post},
 };
-use oms::tl_tradelocker::{
+use oms::tradelocker::{
     OrderIntent, ensure_all_fresh, get_all_account_info,
     get_config_headers, load_config,
 };
@@ -15,7 +15,7 @@ use std::{error::Error, sync::Arc};
 use tokio::sync::Mutex;
 
 pub struct AppState {
-    pub accounts: Mutex<std::collections::HashMap<String, oms::tl_tradelocker::TLAccountState>>,
+    pub accounts: Mutex<std::collections::HashMap<String, oms::tradelocker::TLAccountState>>,
     pub client: reqwest::Client,
 }
 
