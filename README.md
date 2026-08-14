@@ -26,7 +26,7 @@ for after v1 works end-to-end on TradeLocker.
 
 **Auth / account bootstrap** — done
 - [x] `load_config` — reads `config.toml` into `HashMap<String, TLAccountState>`
-- [x] `ensure_fresh_token` / `ensure_all_fresh` — per-account login + refresh
+- [x] `ensure_fresh_token` / `refresh_all_tokens` — per-account login + refresh
 - [x] `fetch_account_info`, `fetch_instrument_info` — pull balance + instrument list per account
 
 **Historical data pipeline** — done
@@ -88,8 +88,8 @@ Requires a running local PostgreSQL instance once the persistence layer is wired
 Current (historical data, working):
 
 ```
-load_config → ensure_all_fresh → get_all_account_info
-            → get_all_order_history_info → get_config_headers
+load_config → refresh_all_tokens → get_all_account_info
+            → get_all_order_history_info → get_configuration
             → zip_all_order_history → group_position_id
 ```
 

@@ -36,7 +36,7 @@ Starting from the end target and asking "what does this require?" at each step:
 ← requires a broker adapter per platform (TradeLocker done; OANDA, MT5 not started)
 ← requires a fan-out dispatcher (currently you loop sequentially in `main.rs`; the concurrent version — `tokio::spawn` per account — is not yet built)
 ← requires per-account position sizing (risk % → lot size), already implemented for TradeLocker via `calculate_lot_size`
-← requires a fresh auth token per account before dispatch (`ensure_all_fresh` — done)
+← requires a fresh auth token per account before dispatch (`refresh_all_tokens` — done)
 ← requires the account's tradable instrument ID and route ID resolved for the requested symbol (`find_route_id_and_instrument_id` — done)
 
 **To submit an order intent from a web page**
@@ -98,7 +98,7 @@ Two things worth naming honestly here, since they're the actual unresolved quest
 - [ ] Web UI submits an order intent and it is received by a running Rust process (not hardcoded in `main.rs`)
 - [ ] Order is dispatched concurrently (not sequentially) to every account in `config.toml`
 - [ ] Each account's lot size is calculated from its own balance and the requested risk %
-- [ ] A single failed account does not block or fail the others (per-account error isolation — already the pattern in `ensure_all_fresh` / `get_all_account_info`, needs to hold under concurrency too)
+- [ ] A single failed account does not block or fail the others (per-account error isolation — already the pattern in `refresh_all_tokens` / `get_all_account_info`, needs to hold under concurrency too)
 - [ ] At least one non-TradeLocker broker (OANDA or MT5) successfully places a live order through the same dispatch path
 - [ ] The web UI displays a single aggregate floating balance figure across all accounts
 - [ ] An open position can be modified (at minimum: SL/TP) from the web UI without touching each broker terminal manually

@@ -1,19 +1,17 @@
 use chrono::{DateTime, Utc};
+use dotenvy::dotenv;
 use reqwest::Client;
 use rust_decimal::Decimal;
 use rust_decimal_macros;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use std::{collections::HashMap, error::Error, str::FromStr, env};
-use dotenvy::dotenv;
+use std::{collections::HashMap, env, error::Error, str::FromStr};
 //use std::io::{self, Write, Read};
 use tokio::time::Duration;
-
 
 ////////////////////////////////////////////////////////////
 // Enums
 ////////////////////////////////////////////////////////////
-
 
 #[derive(Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -63,7 +61,6 @@ impl TradeSetup {
     }
 }
 
-
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum OrderSide {
@@ -91,7 +88,6 @@ impl FromStr for OrderSide {
         }
     }
 }
-
 
 #[derive(Deserialize, Debug)]
 pub enum RateLimitType {
@@ -133,7 +129,6 @@ pub enum RateLimitType {
     QuotesHistory,
 }
 
-
 #[derive(Deserialize, Debug)]
 pub enum LimitType {
     #[serde(rename = "QUOTES_HISTORY_BARS")]
@@ -142,13 +137,11 @@ pub enum LimitType {
     MaxOrdersCountInHistory,
 }
 
-
 #[derive(Deserialize, Debug)]
 pub enum RateLimitMeasure {
     #[serde(rename = "SECONDS")]
     Seconds,
 }
-
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -165,12 +158,9 @@ pub enum SymbolType {
     Spreadbet,
 }
 
-
-
 ////////////////////////////////////////////////////////////
 // Functions
 ////////////////////////////////////////////////////////////
-
 
 //`load_config()` stores account login values into `TLAccountState` struct
 pub fn load_config(path: &str) -> Result<HashMap<String, TLAccountState>, Box<dyn Error>> {
@@ -187,7 +177,7 @@ pub fn load_config(path: &str) -> Result<HashMap<String, TLAccountState>, Box<dy
                 account_info: None,
                 instruments: None,
                 orders_history: None,
-                tl_config: None,
+                config_data: None,
                 zipped_orders: None,
                 quotes: None,
             },
@@ -196,10 +186,10 @@ pub fn load_config(path: &str) -> Result<HashMap<String, TLAccountState>, Box<dy
     Ok(accounts)
 }
 
-pub async fn ensure_all_fresh(accounts: &mut HashMap<String, TLAccountState>, client: &Client) {
+pub async fn refresh_all_tokens(accounts: &mut HashMap<String, TLAccountState>, client: &Client) {
     // Login to accounts sourced from config.toml
     for (account_name, account) in accounts.iter_mut() {
-        if let Err(e) = account.tl_ensure_fresh_token(client).await {
+        if let Err(e) = account.ensure_fresh_token(client).await {
             println!("{} token refresh failed: {}", account_name, e);
         }
     }
@@ -239,7 +229,7 @@ pub async fn get_all_order_history_info(
 }
 
 //GET api config headers
-pub async fn get_config_headers(accounts: &mut HashMap<String, TLAccountState>, client: &Client) {
+pub async fn get_configuration(accounts: &mut HashMap<String, TLAccountState>, client: &Client) {
     for (account_name, account) in accounts.iter_mut() {
         if let Err(e) = account.fetch_config(&client).await {
             println!("{} failed to fetch config info: {}", account_name, e);
@@ -269,7 +259,13 @@ pub async fn zip_all_order_history(accounts: &mut HashMap<String, TLAccountState
     }
 }
 
-pub async fn build_order_intent(instrument:String, side: OrderSide, setup: TradeSetup, stop_loss: Decimal, take_profit: Decimal) -> OrderIntent {
+pub async fn build_order_intent(
+    instrument: String,
+    side: OrderSide,
+    setup: TradeSetup,
+    stop_loss: Decimal,
+    take_profit: Decimal,
+) -> OrderIntent {
     let order_intent: OrderIntent = OrderIntent {
         instrument: instrument,
         setup: setup,
@@ -277,7 +273,7 @@ pub async fn build_order_intent(instrument:String, side: OrderSide, setup: Trade
         stop_loss: stop_loss,
         take_profit: take_profit,
     };
-    return order_intent
+    return order_intent;
 }
 
 /*
@@ -324,11 +320,9 @@ pub fn prompt(label: &str) -> Result<String, Box<dyn Error>> {
 }
     */
 
-
 ////////////////////////////////////////////////////////////
 // Structs & Methods
 ////////////////////////////////////////////////////////////
-
 
 #[derive(Debug)]
 pub struct TLAccountState {
@@ -337,13 +331,13 @@ pub struct TLAccountState {
     pub account_info: Option<AccountInfo>,
     pub instruments: Option<Vec<InstrumentInfo>>,
     pub orders_history: Option<Vec<Vec<serde_json::Value>>>,
-    pub tl_config: Option<ConfigData>,
+    pub config_data: Option<ConfigData>,
     pub zipped_orders: Option<Vec<HashMap<String, serde_json::Value>>>,
     pub quotes: Option<QuotesResponse>,
 }
 
 impl TLAccountState {
-    pub async fn tl_ensure_fresh_token(&mut self, client: &Client) -> Result<(), Box<dyn Error>> {
+    pub async fn ensure_fresh_token(&mut self, client: &Client) -> Result<(), Box<dyn Error>> {
         match &self.token {
             None => {
                 let login = LoginRequest {
@@ -351,7 +345,7 @@ impl TLAccountState {
                     password: self.config.tl_password.clone(),
                     server: self.config.tl_server.clone(),
                 };
-                let new_token = login.tl_login(client).await?;
+                let new_token = login.fetch_jwt_token(client).await?;
                 self.token = Some(new_token);
             }
             Some(token) => {
@@ -455,16 +449,16 @@ impl TLAccountState {
             .await?;
 
         let parsed: ConfigResponse = res.json().await?;
-        self.tl_config = Some(parsed.d);
-        println!("Config: \n {:?}", self.tl_config);
+        self.config_data = Some(parsed.d);
+        println!("Config: \n {:?}", self.config_data);
         Ok(())
     }
 
     pub fn zip_orders(&self) -> Result<Vec<HashMap<String, serde_json::Value>>, Box<dyn Error>> {
         let columns = &self
-            .tl_config
+            .config_data
             .as_ref()
-            .ok_or("tl_config not loaded")?
+            .ok_or("config_data not loaded")?
             .orders_history_config
             .columns;
         let rows = self
@@ -773,7 +767,7 @@ pub struct TokenResponse {
 }
 
 impl LoginRequest {
-    pub async fn tl_login(&self, client: &Client) -> Result<TokenResponse, Box<dyn Error>> {
+    pub async fn fetch_jwt_token(&self, client: &Client) -> Result<TokenResponse, Box<dyn Error>> {
         let url = "https://demo.tradelocker.com/backend-api/auth/jwt/token";
         let res = client.post(url).json(self).send().await?;
         let token_out: TokenResponse = res.json().await?;
@@ -853,7 +847,6 @@ pub struct Routes {
     pub kind: String,
 }
 
-
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct InstrumentInfo {
@@ -900,7 +893,6 @@ pub struct ConfigData {
     */
     pub rate_limits: RateLimitType,
     pub limits: Vec<ColumnDef>,
-    
 }
 
 #[derive(Deserialize, Debug)]
@@ -912,13 +904,11 @@ pub struct RateLimit {
     pub limit: u32,
 }
 
-
 #[derive(Deserialize, Debug)]
 pub struct Limit {
     pub limit_type: LimitType,
     pub limit: u32,
 }
-
 
 /*
 #[derive(Deserialize, Debug)]
@@ -998,10 +988,6 @@ pub struct Trades {
     pub status: String,
     pub source: String,
 }
-
-
-
-
 
 pub trait RiskCalculator {
     fn calculate_money_at_risk(&self, balance: Decimal) -> Decimal;
@@ -1090,5 +1076,3 @@ pub struct TickCostTier {
     pub left_range_limit: Option<Decimal>,
     pub tick_cost: Option<Decimal>,
 }
-
-

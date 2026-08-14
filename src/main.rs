@@ -5,8 +5,7 @@ use axum::{
     routing::{get, post},
 };
 use oms::tradelocker::{
-    OrderIntent, ensure_all_fresh, get_all_account_info,
-    get_config_headers, load_config,
+    OrderIntent, refresh_all_tokens, get_all_account_info, get_configuration, load_config,
 };
 use reqwest::Client;
 use serde::Serialize;
@@ -65,10 +64,10 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
     let client = Client::new();
     let mut accounts = load_config("config.toml")?;
 
-    ensure_all_fresh(&mut accounts, &client).await;
+    refresh_all_tokens(&mut accounts, &client).await;
     get_all_account_info(&mut accounts, &client).await;
     //get_all_order_history_info(&mut accounts, &client).await;
-    get_config_headers(&mut accounts, &client).await;
+    get_configuration(&mut accounts, &client).await;
 
     let shared_state = Arc::new(AppState {
         accounts: Mutex::new(accounts),
