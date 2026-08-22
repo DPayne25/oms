@@ -1,11 +1,10 @@
 use chrono::{DateTime, Utc};
-use dotenvy::dotenv;
 use reqwest::Client;
 use rust_decimal::Decimal;
 use rust_decimal_macros;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use std::{collections::HashMap, env, error::Error, str::FromStr};
+use std::{collections::HashMap, error::Error, str::FromStr};
 //use std::io::{self, Write, Read};
 use tokio::time::Duration;
 
@@ -439,7 +438,6 @@ impl TLAccountState {
             .as_ref()
             .ok_or("no account_info for this account")?;
         let url = format!("{}trade/config", &self.config.tl_url,);
-        dotenv()?;
 
         let res = client
             .get(url)

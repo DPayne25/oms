@@ -12,6 +12,7 @@ use serde::Serialize;
 use serde_json::json;
 use std::{error::Error, sync::Arc};
 use tokio::sync::Mutex;
+use dotenvy::dotenv;
 
 pub struct AppState {
     pub accounts: Mutex<std::collections::HashMap<String, oms::tradelocker::TLAccountState>>,
@@ -63,6 +64,7 @@ async fn place_order_handler(
 pub async fn main() -> Result<(), Box<dyn Error>> {
     let client = Client::new();
     let mut accounts = load_config("config.toml")?;
+    dotenv()?;
 
     refresh_all_tokens(&mut accounts, &client).await;
     get_all_account_info(&mut accounts, &client).await;
