@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Order Intent</title>
+
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: Helvetica, Arial, sans-serif;
+    color: #eef1f5;
+    background: linear-gradient(160deg, #161f20, #0d1112);
+  }
+  body {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    overflow-x: hidden;
+  }
+  /* soft ambient glow, no imagery — pure CSS */
+  body::before, body::after {
+    content: "";
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(90px);
+    z-index: 0;
+    pointer-events: none;
+  }
+  body::before {
+    width: 620px; height: 620px;
+    top: -160px; left: -140px;
+    background: radial-gradient(circle, rgba(59,130,246,0.35), transparent 70%);
+  }
+  body::after {
+    width: 560px; height: 560px;
+    bottom: -180px; right: -120px;
+    background: radial-gradient(circle, rgba(99,102,241,0.25), transparent 70%);
+  }
+
+  .bg-text {
+    position: fixed;
+    z-index: 0;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: "Proxima Nova", Helvetica, Arial, sans-serif;
+    font-weight: 700;
+    font-size: 22vw;
+    letter-spacing: 0.04em;
+    color: rgba(255,255,255,0.05);
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .card {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 440px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    backdrop-filter: blur(24px) saturate(140%) contrast(115%);
+    -webkit-backdrop-filter: blur(24px) saturate(140%) contrast(115%);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+    padding: 36px 34px 30px;
+    opacity: 0.7;
+  }
+
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(238,241,245,0.55);
+    margin: 0 0 6px;
+  }
+  h1 {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    margin: 0 0 28px;
+  }
+
+  label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(238,241,245,0.6);
+    margin-bottom: 8px;
+  }
+  .field { margin-bottom: 20px; }
+
+  input[type="text"] {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-family: inherit;
+    color: #eef1f5;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 10px;
+    outline: none;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  input[type="text"]:focus {
+    border-color: rgba(96,165,250,0.7);
+    background: rgba(255,255,255,0.08);
+  }
+  input[type="text"]::placeholder { color: rgba(238,241,245,0.35); }
+
+  select {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-family: inherit;
+    color: #eef1f5;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 10px;
+    outline: none;
+    appearance: none;
+  }
+  select:focus { border-color: rgba(96,165,250,0.7); }
+
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  .side-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .side-toggle button {
+    padding: 12px 0;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.16);
+    background: rgba(255,255,255,0.05);
+    color: rgba(238,241,245,0.7);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .side-toggle button.active[data-side="buy"] {
+    background: rgba(34,197,94,0.18);
+    border-color: rgba(34,197,94,0.6);
+    color: #6fe3a0;
+  }
+  .side-toggle button.active[data-side="sell"] {
+    background: rgba(239,68,68,0.18);
+    border-color: rgba(239,68,68,0.6);
+    color: #ff9d9d;
+  }
+
+  .submit {
+    width: 100%;
+    margin-top: 8px;
+    padding: 14px 0;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #0d1117;
+    background: #eef1f5;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .submit:hover { opacity: 0.88; }
+  .submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .results {
+    margin-top: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .result-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    font-size: 13px;
+  }
+  .result-row .name { color: rgba(238,241,245,0.85); }
+  .result-row .status { font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; font-size: 11px; }
+  .result-row.ok .status { color: #6fe3a0; }
+  .result-row.fail .status { color: #ff9d9d; }
+
+  .notice {
+    margin-top: 14px;
+    font-size: 12px;
+    color: rgba(238,241,245,0.5);
+  }
+
+  .card {
+    transition: transform 0.55s cubic-bezier(0.4,0,0.2,1), opacity 0.5s ease;
+  }
+
+  .dispatch-grid {
+    display: none;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    align-content: flex-start;
+  }
+  .dispatch-grid.active { display: flex; }
+
+  .mini-card {
+    width: 96px;
+    height: 48px;
+    padding: 4px 6px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.14);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: rgba(238,241,245,0.8);
+    opacity: 0;
+    transform: scale(0.82);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  .mini-card.show { opacity: 1; transform: scale(1); }
+
+  .dispatch-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    display: none;
+    flex-wrap: wrap;
+    align-content: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 60px;
+    pointer-events: none;
+  }
+  .dispatch-overlay.active { display: flex; }
+
+  .solo-card {
+    width: 130px;
+    height: 64px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.16);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: rgba(238,241,245,0.85);
+    opacity: 0;
+    transform: scale(0.8);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+  }
+  .solo-card.show { opacity: 1; transform: scale(1); }
+  .solo-card.dispatch { opacity: 0; transform: translateX(160%) scale(0.95); }
+
+  .confirm-overlay {
+    position: fixed;
+    z-index: 2;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 18px 32px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.18);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #6fe3a0;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s ease;
+    white-space: nowrap;
+  }
+
+  .card { --rail-tint: rgba(96,165,250,0.35); }
+
+  .panel { display: none; opacity: 0; transition: opacity 0.18s ease; }
+  .panel.active { display: block; opacity: 1; }
+
+  .intent-rail {
+    position: absolute;
+    top: 14%;
+    bottom: 14%;
+    left: -1px;
+    width: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    cursor: pointer;
+    z-index: 2;
+  }
+  .rail-line {
+    width: 3px;
+    height: 100%;
+    border-radius: 3px;
+    background: var(--rail-tint);
+    transition: background 0.3s ease, width 0.2s ease, box-shadow 0.3s ease;
+  }
+  .intent-rail:hover .rail-line,
+  .intent-rail.open .rail-line {
+    width: 4px;
+    box-shadow: 0 0 14px 1px var(--rail-tint);
+  }
+  .rail-labels {
+    position: absolute;
+    right: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 14px 18px;
+    border-radius: 12px;
+    background: rgba(20,24,28,0.55);
+    border: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    opacity: 0;
+    transform: translateX(-6px);
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    white-space: nowrap;
+  }
+  .intent-rail:hover .rail-labels,
+  .intent-rail.open .rail-labels {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+  .rail-labels button {
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: left;
+    color: rgba(238,241,245,0.4);
+    cursor: pointer;
+    padding: 2px 0;
+    transition: opacity 0.15s ease-in, color 0.15s ease;
+  }
+  .rail-labels:hover button { opacity: 0.5; }
+  .rail-labels button:hover,
+  .rail-labels button:focus-visible { opacity: 1 !important; color: #eef1f5; }
+  .rail-labels button.current { color: #eef1f5; opacity: 1; }
+  .rail-labels button:focus-visible { outline: 1px solid rgba(96,165,250,0.7); outline-offset: 3px; }
+</style>
+</head>
+<body>
+
+  <div class="bg-text">PURE</div>
+
+  <div class="card">
+    <div class="card-body panel active" id="card-body">
+    <p class="eyebrow">Trade Dispatch</p>
+    <h1>Order Intent</h1>
+
+    <form id="order-form">
+      <div class="field">
+        <label for="instrument">Instrument</label>
+        <input type="text" id="instrument" placeholder="EURUSD" autocomplete="off" required="">
+      </div>
+
+      <div class="field">
+        <label>Side</label>
+        <div class="side-toggle" id="side-toggle">
+          <button type="button" data-side="buy" class="active">Buy</button>
+          <button type="button" data-side="sell">Sell</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="setup">Setup</label>
+        <select id="setup">
+          <option value="jcp">JCP</option>
+          <option value="dipndot">Dip N Dot</option>
+          <option value="testsetup">Test Setup</option>
+        </select>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label for="stop_loss">Stop Loss</label>
+          <input type="text" id="stop_loss" placeholder="1.14730" autocomplete="off" required="">
+        </div>
+        <div class="field">
+          <label for="take_profit">Take Profit</label>
+          <input type="text" id="take_profit" placeholder="1.12757" autocomplete="off" required="">
+        </div>
+      </div>
+
+      <button type="submit" class="submit" id="submit-btn">Place Order</button>
+    </form>
+
+    <div class="results" id="results"></div>
+    <p class="notice" id="notice"></p>
+    </div>
+
+    <div class="panel" id="panel-modify">
+      <p class="eyebrow">Position Update</p>
+      <h1>Modify Stop</h1>
+      <div class="field">
+        <label>Parent ID</label>
+        <input type="text" placeholder="a2f9-4d1c-…" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>New Stop Loss</label>
+        <input type="text" placeholder="1.14290" autocomplete="off">
+      </div>
+      <button class="submit">Update Stop</button>
+    </div>
+
+    <div class="panel" id="panel-close">
+      <p class="eyebrow">Position Exit</p>
+      <h1>Close All</h1>
+      <div class="field">
+        <label>Parent ID</label>
+        <input type="text" placeholder="a2f9-4d1c-…" autocomplete="off">
+      </div>
+      <button class="submit" style="background:#ff5c5c;color:#2a0a0a;">Close All Positions</button>
+    </div>
+
+    <div class="intent-rail" id="rail">
+      <div class="rail-labels" id="rail-labels">
+        <button data-intent="order" class="current">Order</button>
+        <button data-intent="modify">Modify</button>
+        <button data-intent="close">Close</button>
+      </div>
+      <div class="rail-line"></div>
+    </div>
+
+    <div class="dispatch-grid" id="dispatch-grid"></div>
+  </div>
+
+  <div class="dispatch-overlay" id="dispatch-overlay"></div>
+
+  <div class="confirm-overlay" id="confirm-overlay">Order Sent</div>
+
+<script>
+  // 'independent' — each account gets its own free-floating card scattered across
+  // the screen, then every card dispatches right on its own. This is current.
+  // 'grouped' — the previous behavior: mini-cards stay inside the Trade Dispatch
+  // card and the whole card flies right together. Flip this back to revert.
+  const DISPATCH_STYLE = 'independent';
+
+  const sideToggle = document.getElementById('side-toggle');
+  let side = 'buy';
+  sideToggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    side = btn.dataset.side;
+    sideToggle.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+  });
+
+  const form = document.getElementById('order-form');
+  const card = document.querySelector('.card');
+  const cardBody = document.getElementById('card-body');
+  const dispatchGrid = document.getElementById('dispatch-grid');
+  const dispatchOverlay = document.getElementById('dispatch-overlay');
+  const confirmOverlay = document.getElementById('confirm-overlay');
+  const resultsEl = document.getElementById('results');
+  const noticeEl = document.getElementById('notice');
+  const submitBtn = document.getElementById('submit-btn');
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  function resetSideToggle() {
+    side = 'buy';
+    sideToggle.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.side === 'buy'));
+  }
+
+  // Previous behavior — kept so DISPATCH_STYLE = 'grouped' still works.
+  async function runGroupedDispatch(accountNames) {
+    dispatchGrid.innerHTML = '';
+    accountNames.forEach((name) => {
+      const el = document.createElement('div');
+      el.className = 'mini-card';
+      el.textContent = name;
+      dispatchGrid.appendChild(el);
+    });
+    cardBody.style.display = 'none';
+    dispatchGrid.classList.add('active');
+
+    await sleep(20); // let layout settle before triggering the show transition
+    const miniEls = dispatchGrid.querySelectorAll('.mini-card');
+    miniEls.forEach((el, i) => setTimeout(() => el.classList.add('show'), i * 30));
+    await sleep(miniEls.length * 30 + 280);
+
+    card.style.transform = 'translateX(160%) rotate(3deg)';
+    card.style.opacity = '0';
+    await sleep(550);
+
+    dispatchGrid.classList.remove('active');
+    dispatchGrid.innerHTML = '';
+    cardBody.style.display = '';
+  }
+
+  // Current behavior — each account is its own isolated card, filling the screen.
+  async function runIndependentDispatch(accountNames) {
+    card.style.transition = 'opacity 0.3s ease';
+    card.style.opacity = '0';
+    await sleep(260);
+    card.style.display = 'none';
+
+    dispatchOverlay.innerHTML = '';
+    accountNames.forEach((name) => {
+      const el = document.createElement('div');
+      el.className = 'solo-card';
+      el.textContent = name;
+      dispatchOverlay.appendChild(el);
+    });
+    dispatchOverlay.classList.add('active');
+
+    await sleep(20); // let layout settle before triggering the show transition
+    const soloEls = dispatchOverlay.querySelectorAll('.solo-card');
+    soloEls.forEach((el, i) => setTimeout(() => el.classList.add('show'), i * 25));
+    await sleep(soloEls.length * 25 + 350);
+
+    soloEls.forEach((el, i) => setTimeout(() => el.classList.add('dispatch'), i * 15));
+    await sleep(soloEls.length * 15 + 550);
+
+    dispatchOverlay.classList.remove('active');
+    dispatchOverlay.innerHTML = '';
+    card.style.display = '';
+    card.style.transition = 'transform 0.55s cubic-bezier(0.4,0,0.2,1), opacity 0.5s ease';
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Dispersing…';
+
+    const payload = {
+      instrument: document.getElementById('instrument').value.trim(),
+      side: side,
+      setup: document.getElementById('setup').value,
+      stop_loss: document.getElementById('stop_loss').value.trim(),
+      take_profit: document.getElementById('take_profit').value.trim(),
+    };
+
+    // The real dispatch is sent (and typically finishes) before this animation
+    // ever gets to the "fly out" step — it's a visualization, not a blocker.
+    const data = await (async () => {
+      try {
+        const res = await fetch('/order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        return await res.json();
+      } catch (err) {
+        // No server reachable — expected while previewing the page on its own.
+        // Stand in with 12 demo accounts so the split animation still reads.
+        return { error: 'Preview mode: no server connected at /order. Run the oms binary to dispatch real orders.' };
+      }
+    })();
+
+    const accountNames = (data.results && data.results.length)
+      ? data.results.map(r => r.account)
+      : Array.from({ length: 12 }, (_, i) => `Account ${i + 1}`);
+
+    if (DISPATCH_STYLE === 'independent') {
+      await runIndependentDispatch(accountNames);
+    } else {
+      await runGroupedDispatch(accountNames);
+    }
+
+    // Confirmation flashes center screen.
+    confirmOverlay.style.opacity = '1';
+    confirmOverlay.style.pointerEvents = 'auto';
+    await sleep(1100);
+    confirmOverlay.style.opacity = '0';
+    confirmOverlay.style.pointerEvents = 'none';
+    await sleep(300);
+
+    // Reset the form and results, then bring a fresh card in from the top.
+    form.reset();
+    resetSideToggle();
+    resultsEl.innerHTML = '';
+    noticeEl.textContent = '';
+    if (data.error) {
+      noticeEl.textContent = data.error;
+    } else if (data.results) {
+      for (const r of data.results) {
+        const row = document.createElement('div');
+        row.className = 'result-row ' + (r.ok ? 'ok' : 'fail');
+        row.innerHTML = `<span class="name">${r.account}</span><span class="status">${r.ok ? 'Sent' : 'Failed'}</span>`;
+        resultsEl.appendChild(row);
+      }
+    }
+
+    card.style.transition = 'none';
+    card.style.transform = 'translateY(-160%)';
+    card.style.opacity = '0';
+    card.offsetHeight; // force reflow so the next transition runs
+    card.style.transition = 'transform 0.6s cubic-bezier(0.4,0,0.2,1), opacity 0.5s ease';
+    card.style.transform = 'translateY(0) translateX(0)';
+    card.style.opacity = '1';
+
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Place Order';
+  });
+
+  const rail = document.getElementById('rail');
+  const railLabels = document.getElementById('rail-labels');
+  const panelIds = { order: 'card-body', modify: 'panel-modify', close: 'panel-close' };
+  const railTint = { order: 'rgba(96,165,250,0.35)', modify: 'rgba(250,204,21,0.35)', close: 'rgba(239,68,68,0.4)' };
+
+  function selectIntent(name) {
+    Object.values(panelIds).forEach(id => document.getElementById(id).classList.remove('active'));
+    document.getElementById(panelIds[name]).classList.add('active');
+    railLabels.querySelectorAll('button').forEach(b => b.classList.toggle('current', b.dataset.intent === name));
+    card.style.setProperty('--rail-tint', railTint[name]);
+    rail.classList.remove('open');
+  }
+
+  rail.addEventListener('click', (e) => {
+    if (e.target.closest('.rail-labels')) return;
+    rail.classList.toggle('open');
+  });
+  railLabels.querySelectorAll('button').forEach(btn =>
+    btn.addEventListener('click', () => selectIntent(btn.dataset.intent)));
+  document.addEventListener('click', (e) => {
+    if (!rail.contains(e.target)) rail.classList.remove('open');
+  });
+</script>
+
+
+
+</body></html>
