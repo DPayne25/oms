@@ -16,6 +16,6 @@ To execute a single trading idea while managing multiple foriegn exchange tradin
 
 OMS solves this problem by having one UI that allows for the execution across all managed accounts at the same time (concurrently).
 
-![oms-demo.gif](attachments\oms-demo.gif)
+<img src="attachments\oms-demo.gif" alt="oms-demo">
 
 Developing...
