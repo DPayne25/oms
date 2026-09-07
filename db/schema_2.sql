@@ -60,6 +60,17 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 
 -- order intent
+CREATE TABLE IF NOT EXIST order_intent (
+    id UUID PRIMARY KEY,
+    symbol VARCHAR(20) NOT NULL,
+    setup VARCHAR(20) NOT NULL,
+    side trade_type NOT NULL,
+    stop_loss NUMERIC(10,5) DEFAULT NULL,
+    take_profit NUMERIC(10,5) DEFAULT NULL,
+    sent_at TIMESTAMPTZ DEFAULT NULLL, -- To use 'CURRENT TIMESTAMP' would cause false data. Field calculated in program.
+);
+
+
 
 -- trades
 CREATE TABLE IF NOT EXISTS trades (
