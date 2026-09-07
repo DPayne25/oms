@@ -37,6 +37,10 @@ BEGIN
         CREATE TYPE data_source AS ENUM ('live', 'imported', 'manual');
     END IF;
 
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_type') THEN
+        CREATE TYPE order_type AS ENUM ('limit', 'market_execution', 'stop');
+    END IF;
+
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'stops_reason') THEN
         CREATE TYPE stops_reason AS ENUM ('level_break', 'atr_trail', 'manual');
     END IF;
@@ -45,6 +49,17 @@ BEGIN
         CREATE TYPE order_status AS ENUM ('New', 'Pending', 'Filled', 'Cancelled', 'Rejected', 'Expired');
     END IF;
 
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'time_frame') THEN
+        CREATE TYPE time_frame AS ENUM ('M', 'W', 'D', 'H1', '15m');
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'htf_bias') THEN
+        CREATE TYPE htf_bias AS ENUM ('engulfing', 'shooting_star', 'hammer', 'flag', 'flat', 'channel');
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'atr') THEN
+        CREATE TYPE time_frame AS ENUM ('within_atr', 'outside_atr');
+    END IF;
 END 
 $$;
 
@@ -122,7 +137,8 @@ CREATE TABLE IF NOT EXISTS trades (
     setup VARCHAR(25) DEFAULT NULL,
     lot_size NUMERIC(5, 2) NOT NULL,
     open_time TIMESTAMPTZ NOT NULL,
-    open_price NUMERIC(10, 5) NOT NULL,
+    entry_price NUMERIC(10, 5) NOT NULL,
+    order_type order_type NOT NULL,
     initial_stop_loss NUMERIC(10, 5) DEFAULT NULL,
     initial_take_profit NUMERIC(10, 5) DEFAULT NULL,
     close_time TIMESTAMPTZ DEFAULT NULL,
@@ -132,6 +148,9 @@ CREATE TABLE IF NOT EXISTS trades (
     gross_profit NUMERIC DEFAULT NULL,
     net_profit NUMERIC DEFAULT NULL,
     source data_source NOT NULL,
+    time_frame time_frame NOT NULL,
+    htf_bias htf_bias DEFAULT NULL,
+    atr atr DEFAULT NULL,
     order_id UUID REFERENCES orders(id) NOT NULL,
     order_intent_id UUID REFRENCES order_intent(id) NOT NULL,
     position_id UUID REFERENCES positions(id) NOT NULL,
