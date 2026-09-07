@@ -67,10 +67,31 @@ CREATE TABLE IF NOT EXIST order_intent (
     side trade_type NOT NULL,
     stop_loss NUMERIC(10,5) DEFAULT NULL,
     take_profit NUMERIC(10,5) DEFAULT NULL,
-    sent_at TIMESTAMPTZ DEFAULT NULLL, -- To use 'CURRENT TIMESTAMP' would cause false data. Field calculated in program.
+    sent_at TIMESTAMPTZ DEFAULT NULLL, -- To use 'CURRENT TIMESTAMP' would cause false data. Field calculated in program. #adr002
 );
 
-
+-- orders
+    -- Transformed orders table from api response.
+CREATE TABLE IF NOT EXIST orders (
+    id UUID PRIMARY KEY,
+    account_id UUID REFERENCES accounts(id) NOT NULL
+    order_intent_id UUID REFERENCES order_intent(id) DEFAULT NULL,
+    symbol VARCHAR (20) NOT NULL,
+    qty NUMERIC(5,2) DEFAULT NULL,
+    side trade_type NOT NULL,
+    entry_price NUMERIC(10,5) NOT NULL,
+    status order_status NOT NULL, -- make enum for order(status) #todo
+    filled_quantity NUMERIC(5,2) NOT NULL,
+    pending_price NUMERIC(10,5) DEFAULT NULL,
+    expire_date TIMESTAMPTZ DEFAULT NULL,
+    created_date TIMESTAMPTZ DEFAULT NOT NULL, -- To use 'CURRENT TIMESTAMP' would cause false data. Field retrieved from api. #adr002
+    last_modified TIMESTAMPTZ DEFAULT NOT NULL, -- To use 'CURRENT TIMESTAMP' would cause false data. Field retrieved from api. #adr002
+    is_open BOOLEAN NOT NULL, 
+    broker_position_id VARCHAR(50) NOT NULL,
+    broker_order_id VARCHAR(50) NOT NULL,
+    stop_loss_price NUMERIC(10,5) DEFAULT NULL,
+    take_profit_price NUMERIC(10,5) DEFAULT NULL,
+);
 
 -- trades
 CREATE TABLE IF NOT EXISTS trades (
