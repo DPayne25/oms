@@ -79,12 +79,12 @@ CREATE TABLE IF NOT EXIST order_intent (
 CREATE TABLE IF NOT EXIST orders (
     id UUID PRIMARY KEY,
     account_id UUID REFERENCES accounts(id) NOT NULL
-    order_intent_id UUID REFERENCES order_intent(id) DEFAULT NULL,
+    order_intent_id UUID REFERENCES order_intent(id) NOT NULL,
     symbol VARCHAR (20) NOT NULL,
     qty NUMERIC(5,2) DEFAULT NULL,
     side trade_type NOT NULL,
     entry_price NUMERIC(10,5) NOT NULL,
-    status order_status NOT NULL, -- make enum for order(status) #todo
+    status order_status NOT NULL, -- make enum for order(status) #done
     filled_quantity NUMERIC(5,2) NOT NULL,
     pending_price NUMERIC(10,5) DEFAULT NULL,
     expire_date TIMESTAMPTZ DEFAULT NULL,
@@ -92,9 +92,25 @@ CREATE TABLE IF NOT EXIST orders (
     last_modified TIMESTAMPTZ DEFAULT NOT NULL, -- To use 'CURRENT TIMESTAMP' would cause false data. Field retrieved from api. #adr002
     is_open BOOLEAN NOT NULL, 
     broker_position_id VARCHAR(50) NOT NULL,
-    broker_order_id VARCHAR(50) NOT NULL,
+    broker_order_id VARCHAR(50) NOT NULL, -- Found in response of place order POST
     stop_loss_price NUMERIC(10,5) DEFAULT NULL,
     take_profit_price NUMERIC(10,5) DEFAULT NULL,
+);
+
+--positions
+CREATE TABLE IF NOT EXISTS positions (
+    id UUID PRIMARY KEY,
+    account_id UUID REFERENCES accounts(id) NOT NULL,
+    order_id UUID REFERENCES orders(id) NOT NULL,
+    order_intent_id UUID REFRENCES order_intent(id) NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    side trade_type NOT NULL,
+    entry_price NUMERIC(10,5) NOT NULL,
+    stop_loss_price NUMERIC(10,5) DEFAULT NULL,
+    qty NUMERIC(5,2) NOT NULL,
+    take_profit_price NUMERIC(10,5) DEFAULT NULL,
+    unrealized_pnl NUMERIC(10,5) NOT NULL,
+    entry_time TIMESTAMPTZ NOT NULL,
 );
 
 -- trades
