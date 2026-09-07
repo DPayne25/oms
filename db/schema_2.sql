@@ -13,12 +13,12 @@ DO $$
 BEGIN
 
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'account_role') THEN
-        CREATE TYPE account_role AS ENUM ('master', 'slave');
+        CREATE TYPE account_role AS ENUM ('aggressive', 'conservative', 'test');
     END IF;
 
 
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'capital_source') THEN
-        CREATE TYPE capital_source AS ENUM ('prop', 'personal', 'cta');
+        CREATE TYPE capital_source AS ENUM ('prop', 'personal', '3_p');
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'drawdown_type') THEN
@@ -127,14 +127,14 @@ CREATE TABLE IF NOT EXISTS trades (
     initial_take_profit NUMERIC(10, 5) DEFAULT NULL,
     close_time TIMESTAMPTZ DEFAULT NULL,
     close_price NUMERIC(10, 5) DEFAULT NULL,
-    sl_was_modified BOOLEAN DEFAULT FALSE,
-    tp_was_modified BOOLEAN DEFAULT FALSE,
     commission NUMERIC DEFAULT NULL,
     swap NUMERIC DEFAULT NULL,
     gross_profit NUMERIC DEFAULT NULL,
     net_profit NUMERIC DEFAULT NULL,
-    status trade_status NOT NULL,
     source data_source NOT NULL,
+    order_id UUID REFERENCES orders(id) NOT NULL,
+    order_intent_id UUID REFRENCES order_intent(id) NOT NULL,
+    position_id UUID REFERENCES positions(id) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
