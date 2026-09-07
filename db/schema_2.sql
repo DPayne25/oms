@@ -41,6 +41,10 @@ BEGIN
         CREATE TYPE stops_reason AS ENUM ('level_break', 'atr_trail', 'manual');
     END IF;
 
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_status') THEN
+        CREATE TYPE order_status AS ENUM ('New', 'Pending', 'Filled', 'Cancelled', 'Rejected', 'Expired');
+    END IF;
+
 END 
 $$;
 
