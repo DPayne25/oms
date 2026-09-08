@@ -1,6 +1,6 @@
 -- traders
 CREATE TABLE IF NOT EXISTS traders (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY,
     username VARCHAR(255) UNIQUE NOT NULL,
     first_name VARCHAR(255) NOT NULL,
     last_name VARCHAR(255) NOT NULL,
@@ -66,7 +66,7 @@ $$;
 
 -- accounts
 CREATE TABLE IF NOT EXISTS accounts (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY,
     currency VARCHAR(3) NOT NULL DEFAULT 'USD',
     account_number VARCHAR(255) UNIQUE NOT NULL,
     broker_name VARCHAR(255) NOT NULL,
@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS positions (
 
 -- trades
 CREATE TABLE IF NOT EXISTS trades (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY,
     account_id INTEGER NOT NULL REFERENCES accounts(account_id),
     symbol VARCHAR(30) NOT NULL,
     side trade_type NOT NULL,
