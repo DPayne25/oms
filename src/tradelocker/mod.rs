@@ -172,6 +172,7 @@ pub fn load_config(path: &str) -> Result<HashMap<String, TLAccountState>, Box<dy
             name,
             TLAccountState {
                 config,
+                // I wonder if I can just do "*: None" #todo
                 token: None,
                 account_info: None,
                 instruments: None,
@@ -990,6 +991,13 @@ pub struct Trades {
     pub status: String,
     pub source: String,
 }
+impl Trades {
+    fn db_log(&self, account_id: &str, db_pool: PgPool) -> Result<(), Error> {
+        //#TODO
+
+        Ok(())
+    }
+}
 
 pub trait RiskCalculator {
     fn calculate_money_at_risk(&self, balance: Decimal) -> Decimal;
@@ -1025,6 +1033,28 @@ pub struct OrderIntent {
     pub stop_loss: Decimal,
     pub take_profit: Decimal,
 }
+impl OrderIntent {
+    pub fn db_log(&self, db_pool: &PgPool) -> Result<(), Error> {
+        let now = chrono::Utc.now();
+        sqlx::query!(
+            r#"INSERT INTO order_intent (symbol, setup, side, stop_loss, take_profit, sent_at)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (id) DO NOTHING;
+            "#,
+            self.symbol,
+            self.setup,
+            self.stop_loss,
+            self.take_profit,
+            now,            
+        )
+        .execute(db_pool)
+        .await?;
+        
+        println!("Rows inserted: {} 'order_intent'");
+
+        Ok(())
+    }
+}
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -1044,6 +1074,33 @@ pub struct NewOrder {
     #[serde(rename = "type")]
     pub kind: String,
     pub validity: String,
+}
+impl NewOrder {
+    pub fn db_log(&self,account_id: &str, db_pool: &PgPool) -> Result<(), Error> {
+        sqlx::query!(
+            r#"INSERT INTO new_order (account_id, qty, route_id, side, stop_loss, stop_loss_type, take_profit, take_profit_type, tradable_instrument_id, kind, validity)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            ON CONFLICT SET (id, account_id) DO NOTHING;
+            "#,
+            account_id,
+            self.qty,
+            self.route_id,
+            self.side,
+            self.stop_loss,
+            self.stop_loss_type,
+            self.take_profit,
+            self.take_profit_type,
+            self.tradable_instrument_id,
+            self.kind,
+            self.validity,
+        )
+        .execute(db_pool)
+        .await?;
+        
+        println!("Rows inserted: {} 'new_order'");
+        
+        Ok(())
+    }
 }
 
 // Instrument Detail (single-instrument endpoint, not the list endpoint)
