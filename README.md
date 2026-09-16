@@ -18,4 +18,9 @@ OMS solves this problem by having one UI that allows for the execution across al
 
 <img src="attachments\oms-demo.gif" alt="oms-demo">
 
+
+<p align="center">
+  <img src="docs/diagrams/state_diagram.png" alt="CIE System Flowchart" width="80%">
+</p>
+
 Developing...
