@@ -171,8 +171,8 @@
             </root>
         </mxGraphModel>
     </diagram>
-    <diagram id="d14nlM54N7hb7VpT2pBH" name="trade_lt">
-        <mxGraphModel dx="740" dy="599" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <diagram id="d14nlM54N7hb7VpT2pBH" name="order_card">
+        <mxGraphModel dx="1167" dy="599" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -252,6 +252,47 @@
                 </mxCell>
                 <mxCell id="zRIpNbXGlJl7clrznJt8-39" style="edgeStyle=none;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;" parent="zRIpNbXGlJl7clrznJt8-40" source="zRIpNbXGlJl7clrznJt8-8" target="zRIpNbXGlJl7clrznJt8-38" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="dBsSaJ3gTkBAXDA5o_Vx" name="fanout_order_card">
+        <mxGraphModel dx="1556" dy="799" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="djWoRF4507AqEAzmeuEq-5" style="edgeStyle=none;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="djWoRF4507AqEAzmeuEq-1" target="djWoRF4507AqEAzmeuEq-2">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="djWoRF4507AqEAzmeuEq-1" value="Order Intent" style="html=1;align=center;verticalAlign=top;rounded=1;absoluteArcSize=1;arcSize=10;dashed=0;whiteSpace=wrap;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="280" width="140" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="djWoRF4507AqEAzmeuEq-2" value="New Orders" style="verticalLabelPosition=bottom;shadow=0;dashed=0;align=center;html=1;verticalAlign=top;shape=mxgraph.electrical.transmission.8_line_bus;" vertex="1" parent="1">
+                    <mxGeometry x="250" y="210" width="130" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="djWoRF4507AqEAzmeuEq-3" value="Orders" style="verticalLabelPosition=bottom;shadow=0;dashed=0;align=center;html=1;verticalAlign=top;shape=mxgraph.electrical.transmission.8_line_bus;" vertex="1" parent="1">
+                    <mxGeometry x="450" y="210" width="130" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="djWoRF4507AqEAzmeuEq-7" style="edgeStyle=none;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="380" y="299.5" as="sourcePoint"/>
+                        <mxPoint x="450" y="299.5" as="targetPoint"/>
+                        <Array as="points">
+                            <mxPoint x="410" y="299.5"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="VEVYQpaAEts2hMbV2Wy4-1" value="Orders" style="verticalLabelPosition=bottom;shadow=0;dashed=0;align=center;html=1;verticalAlign=top;shape=mxgraph.electrical.transmission.8_line_bus;" vertex="1" parent="1">
+                    <mxGeometry x="650" y="210" width="130" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="VEVYQpaAEts2hMbV2Wy4-2" style="edgeStyle=none;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="580" y="299.84" as="sourcePoint"/>
+                        <mxPoint x="650" y="299.84" as="targetPoint"/>
+                        <Array as="points">
+                            <mxPoint x="610" y="299.84"/>
+                        </Array>
+                    </mxGeometry>
                 </mxCell>
             </root>
         </mxGraphModel>

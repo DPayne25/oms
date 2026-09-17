@@ -65,6 +65,7 @@ $$;
 
 
 -- accounts
+-- list of user accounts
 CREATE TABLE IF NOT EXISTS accounts (
     id UUID PRIMARY KEY,
     currency VARCHAR(3) NOT NULL DEFAULT 'USD',
@@ -72,14 +73,15 @@ CREATE TABLE IF NOT EXISTS accounts (
     broker_name VARCHAR(255) NOT NULL,
     platform_name VARCHAR(255) NOT NULL,
     leverage INTEGER NOT NULL,
-    trader_id INTEGER NOT NULL REFERENCES traders(trader_id),
+    trader_id UUID NOT NULL REFERENCES traders(id),
     role account_role NOT NULL,
     capital_source capital_source NOT NULL,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP    
 );
 
 -- order intent
-CREATE TABLE IF NOT EXIST order_intent (
+-- input from UI
+CREATE TABLE IF NOT EXISTS order_intent (
     id UUID PRIMARY KEY,
     symbol VARCHAR(20) NOT NULL,
     setup VARCHAR(20) NOT NULL,
@@ -89,17 +91,35 @@ CREATE TABLE IF NOT EXIST order_intent (
     sent_at TIMESTAMPTZ DEFAULT NULLL, -- To use 'CURRENT TIMESTAMP' would cause false data. Field calculated in program. #adr002
 );
 
+-- new order
+-- what the code calculated and sent for place order parameters
+CREATE TABLE IF NOT EXISTS new_order (
+    id UUID PRIMARY KEY,
+    order_intent_id UUID REFERENCES order_intent(id) NOT NULL,
+    qty NUMERIC(5,2) NOT NULL,
+    route_id INTEGER NOT NULL,
+    side side NOT NULL,
+    stop_loss NUMERIC(10,5) NOT NULL,
+    stop_loss_type VARCHAR(20) NOT NULL,
+    take_profit NUMERIC(10,5) NOT NULL,
+    take_profit_type VARCHAR(20) NOT NULL,
+    tradable_instrument_id INTEGER NOT NULL,
+    kind VARCHAR(20) NOT NULL,
+    validity VARCHAR(20) NOT NULL
+);
+
 -- orders
-    -- Transformed orders table from api response.
-CREATE TABLE IF NOT EXIST orders (
+-- Transformed orders table from api response.
+CREATE TABLE IF NOT EXISTS orders (
     id UUID PRIMARY KEY,
     account_id UUID REFERENCES accounts(id) NOT NULL
     order_intent_id UUID REFERENCES order_intent(id) NOT NULL,
+    new_order_id UUID REFERENCES new_order(id),
     symbol VARCHAR (20) NOT NULL,
     qty NUMERIC(5,2) DEFAULT NULL,
     side trade_type NOT NULL,
     entry_price NUMERIC(10,5) NOT NULL,
-    status order_status NOT NULL, -- make enum for order(status) #done
+    order_status order_status NOT NULL,
     filled_quantity NUMERIC(5,2) NOT NULL,
     pending_price NUMERIC(10,5) DEFAULT NULL,
     expire_date TIMESTAMPTZ DEFAULT NULL,
@@ -117,7 +137,7 @@ CREATE TABLE IF NOT EXISTS positions (
     id UUID PRIMARY KEY,
     account_id UUID REFERENCES accounts(id) NOT NULL,
     order_id UUID REFERENCES orders(id) NOT NULL,
-    order_intent_id UUID REFRENCES order_intent(id) NOT NULL,
+    order_intent_id UUID REFERENCES order_intent(id) NOT NULL,
     symbol VARCHAR(20) NOT NULL,
     side trade_type NOT NULL,
     entry_price NUMERIC(10,5) NOT NULL,
@@ -152,7 +172,7 @@ CREATE TABLE IF NOT EXISTS trades (
     htf_bias htf_bias DEFAULT NULL,
     atr atr DEFAULT NULL,
     order_id UUID REFERENCES orders(id) NOT NULL,
-    order_intent_id UUID REFRENCES order_intent(id) NOT NULL,
+    order_intent_id UUID REFERENCES order_intent(id) NOT NULL,
     position_id UUID REFERENCES positions(id) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
