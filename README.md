@@ -24,7 +24,7 @@ OMS solves this problem by having one UI that allows for the execution across al
 </p>
 
 <p align="center">
-  <img src="attachments\trade_lifetime.svg" alt="CIE System Flowchart" width="80%">
+  <img src="attachments\fanout_order_card.svg" alt="CIE System Flowchart" width="80%">
 </p>
 
 Developing...
