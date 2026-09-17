@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS order_intent (
 
 -- new order
 -- what the code calculated and sent for place order parameters
-CREATE TABLE IF NOT EXISTS new_order (
+CREATE TABLE IF NOT EXISTS new_orders (
     id UUID PRIMARY KEY,
     account_id UUID REFERENCES accounts(id) NOT NULL,
     order_intent_id UUID REFERENCES order_intent(id) NOT NULL,
@@ -113,8 +113,6 @@ CREATE TABLE IF NOT EXISTS new_order (
 -- Transformed orders table from api response.
 CREATE TABLE IF NOT EXISTS orders (
     id UUID PRIMARY KEY,
-    account_id UUID REFERENCES accounts(id) NOT NULL,
-    order_intent_id UUID REFERENCES order_intent(id) NOT NULL,
     new_order_id UUID REFERENCES new_order(id),
     symbol VARCHAR (20) NOT NULL,
     qty NUMERIC(5,2) DEFAULT NULL,
