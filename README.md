@@ -20,7 +20,11 @@ OMS solves this problem by having one UI that allows for the execution across al
 
 
 <p align="center">
-  <img src="docs/diagrams/state_diagram.png" alt="CIE System Flowchart" width="80%">
+  <img src="attachments\state_diagram.svg" alt="CIE System Flowchart" width="80%">
+</p>
+
+<p align="center">
+  <img src="attachments\trade_lifetime.svg" alt="CIE System Flowchart" width="80%">
 </p>
 
 Developing...
