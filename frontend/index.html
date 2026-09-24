@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Order Intent</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="booting">
+
+  <button type="button" class="splash" id="splash" aria-label="Enter">
+    <span class="splash-o">O</span>
+    <span class="splash-slash" aria-hidden="true">Ø</span>
+  </button>
+
+  <div class="bg-text">Ø</div>
+
+  <button type="button" class="theme-toggle" id="theme-toggle">Light</button>
+
+  <div class="card" id="order-card">
+
+    <!-- ===== Order ===== -->
+    <div class="panel" id="panel-order">
+      <p class="eyebrow">Trade Dispatch</p>
+      <h1>Order Intent</h1>
+
+      <form id="order-form">
+        <div class="field">
+          <label for="order_idea">Idea</label>
+          <select id="order_idea" class="idea-select" required></select>
+        </div>
+
+        <div class="field">
+          <div class="price-head">
+            <label for="price">Price</label>
+            <label class="pending-check" for="pending">
+              <input type="checkbox" id="pending">
+              <span class="pending-circle"></span>
+              <span class="pending-text">Pending</span>
+            </label>
+          </div>
+          <input type="text" id="price" placeholder="Market" autocomplete="off" disabled>
+        </div>
+
+        <button type="submit" class="submit" id="submit-btn">Place Order</button>
+      </form>
+
+      <div class="results" id="results"></div>
+      <p class="notice" id="notice"></p>
+    </div>
+
+    <!-- ===== Ideas (rows from the `ideas` table) ===== -->
+    <div class="panel active" id="panel-ideas">
+      <p class="eyebrow">Trade Journal</p>
+      <h1>Ideas</h1>
+
+      <div class="idea-list" id="idea-list"></div>
+
+      <form class="idea-form" id="idea-form">
+        <div class="field">
+          <label for="idea_symbol">Symbol</label>
+          <input type="text" id="idea_symbol" placeholder="EURUSD" autocomplete="off" required>
+        </div>
+
+        <div class="field">
+          <label>Side</label>
+          <div class="side-toggle" id="idea-side-toggle">
+            <button type="button" data-side="buy" class="active">Buy</button>
+            <button type="button" data-side="sell">Sell</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="idea_setup">Setup</label>
+          <select id="idea_setup">
+            <option value="jcp">JCP</option>
+            <option value="dipndot">Dip N Dot</option>
+            <option value="testsetup">Test Setup</option>
+          </select>
+        </div>
+
+        <div class="row2">
+          <div class="field">
+            <label for="idea_timeframe">Timeframe</label>
+            <select id="idea_timeframe">
+              <option value="M">M</option>
+              <option value="W">W</option>
+              <option value="D" selected>D</option>
+              <option value="4H">4H</option>
+              <option value="H1">H1</option>
+              <option value="15m">15m</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="idea_htf_bias">HTF Bias</label>
+            <select id="idea_htf_bias">
+              <option value="engulfing">Engulfing</option>
+              <option value="shooting_star">Shooting Star</option>
+              <option value="hammer">Hammer</option>
+              <option value="flag">Flag</option>
+              <option value="flat">Flat</option>
+              <option value="channel">Channel</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row3">
+          <div class="field">
+            <label for="idea_entry">Entry</label>
+            <input type="text" id="idea_entry" placeholder="1.13900" autocomplete="off" required>
+          </div>
+          <div class="field">
+            <label for="idea_sl">Stop</label>
+            <input type="text" id="idea_sl" placeholder="1.14730" autocomplete="off" required>
+          </div>
+          <div class="field">
+            <label for="idea_tp">Target</label>
+            <input type="text" id="idea_tp" placeholder="1.12757" autocomplete="off" required>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="button" class="submit ghost" id="idea-cancel">Cancel</button>
+          <button type="submit" class="submit">Save Idea</button>
+        </div>
+      </form>
+
+      <div class="idea-create" id="idea-create">
+        <button type="button" class="submit" id="idea-new-btn">Create New Idea</button>
+      </div>
+    </div>
+
+    <!-- ===== Modify ===== -->
+    <div class="panel" id="panel-modify">
+      <p class="eyebrow">Position Update</p>
+      <h1>Modify Stop</h1>
+      <p class="notice">Moves the stop on every position belonging to the Idea, on every account.</p>
+      <div class="field">
+        <label for="modify_idea">Idea</label>
+        <select id="modify_idea" class="idea-select"></select>
+      </div>
+      <div class="field">
+        <label for="new_stop">New Stop Loss</label>
+        <input type="text" id="new_stop" placeholder="1.14290" autocomplete="off">
+      </div>
+      <button class="submit" type="button" id="modify-btn">Update Stop</button>
+      <div class="results" id="modify-results"></div>
+    </div>
+
+    <!-- ===== Close ===== -->
+    <div class="panel" id="panel-close">
+      <p class="eyebrow">Position Exit</p>
+      <h1>Close Idea</h1>
+      <p class="notice">Closes every position belonging to the Idea, on every account.</p>
+      <div class="field">
+        <label for="close_idea">Idea</label>
+        <select id="close_idea" class="idea-select"></select>
+      </div>
+      <button class="submit" type="button" id="close-btn">Close Idea Positions</button>
+      <div class="results" id="close-results"></div>
+    </div>
+
+    <!-- One dot per connected account, coloured by its worst risk meter. -->
+    <div class="status-dots" id="status-dots"></div>
+
+    <!-- Opens to the left when a status dot is clicked. -->
+    <aside class="account-panel" id="account-panel">
+      <div class="account-head">
+        <div>
+          <p class="eyebrow">Account</p>
+          <h2 id="account-name"></h2>
+        </div>
+      </div>
+      <div class="risk-meters account-meters">
+        <div class="risk-meter" id="meter-daily">
+          <div class="risk-meter-head"><span>Daily Loss</span><span class="risk-meter-value"></span></div>
+          <div class="risk-meter-track"><div class="risk-meter-fill"></div></div>
+        </div>
+        <div class="risk-meter" id="meter-maxdd">
+          <div class="risk-meter-head"><span>Max Drawdown</span><span class="risk-meter-value"></span></div>
+          <div class="risk-meter-track"><div class="risk-meter-fill"></div></div>
+        </div>
+      </div>
+      <div class="account-state" id="account-state"></div>
+      <div class="position-list" id="position-list"></div>
+    </aside>
+
+    <!-- Portfolio risk (right of the card): worst state across all accounts. -->
+    <button type="button" class="risk-dot" id="risk-dot" aria-label="Risk state"></button>
+    <aside class="risk-panel" id="risk-panel">
+      <div class="account-head">
+        <div>
+          <p class="eyebrow">Portfolio</p>
+          <h2 id="risk-state"></h2>
+        </div>
+      </div>
+      <div class="risk-counts" id="risk-counts"></div>
+      <div class="risk-watch" id="risk-watch"></div>
+    </aside>
+
+    <div class="intent-rail" id="rail">
+      <div class="rail-labels" id="rail-labels">
+        <button type="button" data-intent="ideas" class="current">Ideas</button>
+        <button type="button" data-intent="order">Order</button>
+        <button type="button" data-intent="modify">Modify</button>
+        <button type="button" data-intent="close">Close</button>
+      </div>
+      <div class="rail-line"></div>
+    </div>
+
+    <div class="dispatch-grid" id="dispatch-grid"></div>
+  </div>
+
+  <div class="dispatch-overlay" id="dispatch-overlay"></div>
+  <div class="confirm-overlay" id="confirm-overlay">Order Sent</div>
+
+<script>
+  (function () {
+    const splash = document.getElementById('splash');
+    const card = document.getElementById('order-card');
+    splash.addEventListener('click', () => {
+      card.classList.add('entering');
+      splash.classList.add('gone');
+      document.body.classList.remove('booting');
+      setTimeout(() => { card.classList.remove('entering'); splash.remove(); }, 900);
+    });
+  })();
+</script>
+<script src="app.js"></script>
+</body>
+</html>

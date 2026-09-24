@@ -50,7 +50,7 @@ BEGIN
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'time_frame') THEN
-        CREATE TYPE time_frame AS ENUM ('M', 'W', 'D', 'H1', '15m');
+        CREATE TYPE time_frame AS ENUM ('M', 'W', 'D', '4H', 'H1', '15m');
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'htf_bias') THEN
@@ -58,7 +58,11 @@ BEGIN
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'atr') THEN
-        CREATE TYPE time_frame AS ENUM ('within_atr', 'outside_atr');
+        CREATE TYPE atr AS ENUM ('within_atr', 'outside_atr');
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'idea_state') THEN
+        CREATE TYPE idea_state AS ENUM ('planned', 'active', 'closed', 'missed');
     END IF;
 END 
 $$;
@@ -79,16 +83,38 @@ CREATE TABLE IF NOT EXISTS accounts (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP    
 );
 
+-- idea
+-- prerequisite for order_intent
+CREATE TABLE IF NOT EXISTS ideas (
+    id UUID PRIMARY KEY,
+    trader_id UUID NOT NULL REFERENCES traders(id),
+    symbol VARCHAR(20) NOT NULL,
+    side side NOT NULL,
+    setup VARCHAR(20) NOT NULL,
+    planned_entry NUMERIC(10, 5) NOT NULL,
+    stop_loss NUMERIC(10, 5) NOT NULL,
+    take_profit NUMERIC(10, 5) NOT NULL,
+    idea_state idea_state NOT NULL,
+    time_frame time_frame NOT NULL,
+    htf_bias htf_bias DEFAULT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    first_fill_at TIMESTAMPTZ DEFAULT NULL,
+    closed_at TIMESTAMPTZ DEFAULT NULL
+);
+
 -- order intent
 -- input from UI
 CREATE TABLE IF NOT EXISTS order_intent (
     id UUID PRIMARY KEY,
-    symbol VARCHAR(20) NOT NULL,
-    setup VARCHAR(20) NOT NULL,
-    side trade_type NOT NULL,
-    stop_loss NUMERIC(10,5) DEFAULT NULL,
-    take_profit NUMERIC(10,5) DEFAULT NULL,
-    sent_at TIMESTAMPTZ DEFAULT NULLL, -- To use 'CURRENT TIMESTAMP' would cause false data. Field calculated in program. #adr002
+    idea_id UUID NOT NULL REFERENCES ideas(id),
+    is_pending BOOLEAN NOT NULL,
+    pending_price NUMERIC(10,5),
+    CONSTRAINT pending_toggle CHECK (
+        (is_pending AND pending_price IS NOT NULL)
+        OR
+        (NOT is_pending AND pending_price IS NULL)
+    ),
+    sent_at TIMESTAMPTZ  NOT NULL -- To use 'CURRENT TIMESTAMP' would cause false data. Field calculated in program. #adr002
 );
 
 -- new order
@@ -116,7 +142,7 @@ CREATE TABLE IF NOT EXISTS orders (
     new_order_id UUID REFERENCES new_order(id),
     symbol VARCHAR (20) NOT NULL,
     qty NUMERIC(5,2) DEFAULT NULL,
-    side trade_type NOT NULL,
+    side side NOT NULL,
     entry_price NUMERIC(10,5) NOT NULL,
     order_status order_status NOT NULL,
     filled_quantity NUMERIC(5,2) NOT NULL,
@@ -135,10 +161,11 @@ CREATE TABLE IF NOT EXISTS orders (
 CREATE TABLE IF NOT EXISTS positions (
     id UUID PRIMARY KEY,
     account_id UUID REFERENCES accounts(id) NOT NULL,
+    idea_id UUID REFERENCES ideas(id) NOT NULL,
     order_id UUID REFERENCES orders(id) NOT NULL,
     order_intent_id UUID REFERENCES order_intent(id) NOT NULL,
     symbol VARCHAR(20) NOT NULL,
-    side trade_type NOT NULL,
+    side side NOT NULL,
     entry_price NUMERIC(10,5) NOT NULL,
     stop_loss_price NUMERIC(10,5) DEFAULT NULL,
     qty NUMERIC(5,2) NOT NULL,
@@ -151,8 +178,9 @@ CREATE TABLE IF NOT EXISTS positions (
 CREATE TABLE IF NOT EXISTS trades (
     id UUID PRIMARY KEY,
     account_id INTEGER NOT NULL REFERENCES accounts(account_id),
+    idea_id UUID REFERENCES ideas(id) NOT NULL,
     symbol VARCHAR(30) NOT NULL,
-    side trade_type NOT NULL,
+    side side NOT NULL,
     setup VARCHAR(25) DEFAULT NULL,
     lot_size NUMERIC(5, 2) NOT NULL,
     open_time TIMESTAMPTZ NOT NULL,

@@ -547,7 +547,7 @@ impl TLAccountState {
         let account = self
             .account_info
             .as_ref()
-            .ok_or("no account_info for this account")?;
+                .ok_or("no account_info for this account")?;
 
         let res = client
             .get(url)
