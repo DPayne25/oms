@@ -46,7 +46,7 @@ BEGIN
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'position_state') THEN
-        CREATE TYPE position_state AS ENUM ('open', 'closed', 'liquidating');
+        CREATE TYPE position_state AS ENUM ('open', 'closed');
     END IF;
     
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'time_frame') THEN
@@ -138,7 +138,7 @@ CREATE TABLE IF NOT EXISTS new_orders (
 );
 
 -- orders
--- Updated from orders table from api response.
+-- updated from orders table from api response.
 CREATE TABLE IF NOT EXISTS orders (
     id UUID PRIMARY KEY,
     new_order_id UUID REFERENCES new_orders(id) UNIQUE NOT NULL,
@@ -167,28 +167,39 @@ CREATE TABLE IF NOT EXISTS order_state_history (
     entry_price NUMERIC(10,5) DEFAULT NULL,
     filled_qty NUMERIC(5,2) DEFAULT NULL,
     broker_event_at TIMESTAMPTZ NOT NULL,
-    recorded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMPTZ
+    recorded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT osh_unique UNIQUE (order_id, order_state, broker_event_at)
 );
 
 
 -- positions
+-- what the api confirms about a position
 CREATE TABLE IF NOT EXISTS positions (
     id UUID PRIMARY KEY,
     account_id UUID REFERENCES accounts(id) NOT NULL,
-    idea_id UUID REFERENCES ideas(id) NOT NULL,
-    order_id UUID REFERENCES orders(id) NOT NULL,
-    order_intent_id UUID REFERENCES order_intent(id) NOT NULL,
+    order_id UUID REFERENCES orders(id) UNIQUE NOT NULL,
+    position_state position_state NOT NULL,
     symbol VARCHAR(20) NOT NULL,
     side side NOT NULL,
     entry_price NUMERIC(10,5) NOT NULL,
+    entry_time TIMESTAMPTZ NOT NULL,
     stop_loss_price NUMERIC(10,5) DEFAULT NULL,
     qty NUMERIC(5,2) NOT NULL,
     take_profit_price NUMERIC(10,5) DEFAULT NULL,
-    unrealized_pnl NUMERIC(10,5) NOT NULL,
-    entry_time TIMESTAMPTZ NOT NULL,
+    close_price NUMERIC(10,5) DEFAULT NULL,
+    close_time TIMESTAMPTZ DEFAULT NULL,
+    gross_profit NUMERIC(10,5) DEFAULT NULL,
+    commission NUMERIC(10,5) DEFAULT NULL,
+    swap NUMERIC (10,5) DEFAULT NULL,
+    CONSTRAINT position_state_oc CHECK (
+        (position_state = 'closed' AND gross_profit IS NOT NULL AND close_price IS NOT NULL AND close_time IS NOT NULL)
+        OR
+        (position_state <> 'closed' AND gross_profit IS NULL AND close_price IS NULL AND close_time IS NULL)
+    )
 );
 
 -- trades
+-- final state of closed positions used for performance analysis
 CREATE TABLE IF NOT EXISTS trades (
     id UUID PRIMARY KEY,
     account_id INTEGER NOT NULL REFERENCES accounts(account_id),
