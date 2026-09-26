@@ -12,25 +12,12 @@ CREATE TABLE IF NOT EXISTS traders (
 DO $$ 
 BEGIN
 
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'account_role') THEN
-        CREATE TYPE account_role AS ENUM ('aggressive', 'conservative', 'test');
-    END IF;
-
-
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'capital_source') THEN
-        CREATE TYPE capital_source AS ENUM ('prop', 'personal', '3_p');
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'drawdown_type') THEN
-        CREATE TYPE drawdown_type AS ENUM ('trailing', 'fixed');
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'account_tier') THEN
+        CREATE TYPE account_tier AS ENUM ('tier_1', 'tier_2', 'tier_3');
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'side') THEN
         CREATE TYPE side AS ENUM ('buy', 'sell');
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'data_source') THEN
-        CREATE TYPE data_source AS ENUM ('live', 'imported', 'manual');
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_type') THEN
@@ -38,7 +25,7 @@ BEGIN
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'stops_reason') THEN
-        CREATE TYPE stops_reason AS ENUM ('level_break', 'atr_trail', 'manual');
+        CREATE TYPE stops_reason AS ENUM ('level_break', 'discretionary');
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_state') THEN
@@ -57,16 +44,24 @@ BEGIN
         CREATE TYPE htf_bias AS ENUM ('engulfing', 'shooting_star', 'hammer', 'flag', 'flat', 'channel');
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'atr') THEN
-        CREATE TYPE atr AS ENUM ('within_atr', 'outside_atr');
-    END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'idea_state') THEN
-        CREATE TYPE idea_state AS ENUM ('planned', 'active', 'closed', 'missed');
+        CREATE TYPE idea_state AS ENUM ('planned', 'active', 'closed', 'canceled');
     END IF;
 END 
 $$;
 
+-- tiers
+-- risk tiers
+CREATE TABLE IF NOT EXISTS tiers (
+    tier account_tier PRIMARY KEY,
+    risk_pct NUMERIC(3,1) NOT NULL
+);
+
+-- DEFAULT tier data
+INSERT INTO tiers (tier, risk_pct)
+VALUES ('tier_1', 0.3), ('tier_2', 0.2), ('tier_3', 0.1)
+ON CONFLICT (tier) DO NOTHING;
 
 -- accounts
 -- list of user accounts
@@ -78,8 +73,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     platform_name VARCHAR(255) NOT NULL,
     leverage INTEGER NOT NULL,
     trader_id UUID NOT NULL REFERENCES traders(id),
-    role account_role NOT NULL,
-    capital_source capital_source NOT NULL,
+    tier account_tier REFERENCES tiers(tier) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP    
 );
 
@@ -149,9 +143,9 @@ CREATE TABLE IF NOT EXISTS orders (
     order_state order_state NOT NULL,
     filled_qty NUMERIC(5,2) DEFAULT NULL,
     pending_price NUMERIC(10,5) DEFAULT NULL,
-    expire_date TIMESTAMPTZ DEFAULT NULL,
-    created_date TIMESTAMPTZ NOT NULL, -- To use 'CURRENT TIMESTAMP' would cause false data. Field retrieved from api. #adr002
-    last_modified TIMESTAMPTZ NOT NULL, -- To use 'CURRENT TIMESTAMP' would cause false data. Field retrieved from api. #adr002
+    broker_expires_at TIMESTAMPTZ DEFAULT NULL,
+    broker_created_at TIMESTAMPTZ NOT NULL, -- To use 'CURRENT TIMESTAMP' would cause false data. Field retrieved from api. #adr002
+    broker_modified_at TIMESTAMPTZ NOT NULL, -- To use 'CURRENT TIMESTAMP' would cause false data. Field retrieved from api. #adr002
     broker_position_id VARCHAR(50) DEFAULT NULL,
     broker_order_id VARCHAR(50) NOT NULL, -- Found in response of place order POST
     stop_loss_price NUMERIC(10,5) DEFAULT NULL,
@@ -166,9 +160,9 @@ CREATE TABLE IF NOT EXISTS order_state_history (
     order_state order_state NOT NULL,
     entry_price NUMERIC(10,5) DEFAULT NULL,
     filled_qty NUMERIC(5,2) DEFAULT NULL,
-    broker_event_at TIMESTAMPTZ NOT NULL,
+    broker_modified_at TIMESTAMPTZ NOT NULL,
     recorded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT osh_unique UNIQUE (order_id, order_state, broker_event_at)
+    CONSTRAINT osh_unique UNIQUE (order_id, order_state, broker_modified_at)
 );
 
 
@@ -198,34 +192,13 @@ CREATE TABLE IF NOT EXISTS positions (
     )
 );
 
--- trades
--- final state of closed positions used for performance analysis
-CREATE TABLE IF NOT EXISTS trades (
+-- stop_loss_history
+-- history of the stop loss adjustments during the liftime of an open position
+CREATE TABLE IF NOT EXISTS stop_loss_history (
     id UUID PRIMARY KEY,
-    account_id INTEGER NOT NULL REFERENCES accounts(account_id),
-    idea_id UUID REFERENCES ideas(id) NOT NULL,
-    symbol VARCHAR(30) NOT NULL,
-    side side NOT NULL,
-    setup VARCHAR(25) DEFAULT NULL,
-    lot_size NUMERIC(5, 2) NOT NULL,
-    open_time TIMESTAMPTZ NOT NULL,
-    entry_price NUMERIC(10, 5) NOT NULL,
-    order_type order_type NOT NULL,
-    initial_stop_loss NUMERIC(10, 5) DEFAULT NULL,
-    initial_take_profit NUMERIC(10, 5) DEFAULT NULL,
-    close_time TIMESTAMPTZ DEFAULT NULL,
-    close_price NUMERIC(10, 5) DEFAULT NULL,
-    commission NUMERIC DEFAULT NULL,
-    swap NUMERIC DEFAULT NULL,
-    gross_profit NUMERIC DEFAULT NULL,
-    net_profit NUMERIC DEFAULT NULL,
-    source data_source NOT NULL,
-    time_frame time_frame NOT NULL,
-    htf_bias htf_bias DEFAULT NULL,
-    atr atr DEFAULT NULL,
-    order_id UUID REFERENCES orders(id) NOT NULL,
-    order_intent_id UUID REFERENCES order_intent(id) NOT NULL,
     position_id UUID REFERENCES positions(id) NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    stop_loss NUMERIC(10,5) NOT NULL,
+    reason stops_reason NOT NULL,
+    sent_at TIMESTAMPTZ NOT NULL,
+    broker_modified_at TIMESTAMPTZ DEFAULT NULL 
 );
-
